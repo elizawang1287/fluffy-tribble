@@ -1,5 +1,6 @@
 import OpenCC from "./vendor/opencc.js";
 import ToJyutping from "./vendor/to-jyutping.js";
+import { applyColloquialRules, colloquialTerms } from "./colloquial-rules.mjs";
 
 export const MAX_INPUT_LENGTH = 2000;
 export const MAX_SEGMENT_LENGTH = 80;
@@ -27,6 +28,7 @@ const highConfidenceTerms = [
   "中文", "英文", "數學", "常識", "音樂", "體育", "今天", "明天", "昨天",
   "早上", "上午", "中午", "下午", "晚上", "八點半", "我們", "你們", "他們",
   "銀行", "行路", "快樂", "分數",
+  ...colloquialTerms,
 ].sort((left, right) => Array.from(right).length - Array.from(left).length);
 
 const toHongKongTraditional = OpenCC.Converter({ from: "cn", to: "hk" });
@@ -129,13 +131,36 @@ export function convertWrittenText(input) {
   };
 }
 
+export function convertColloquialText(input) {
+  const normalized = normalizeInput(input);
+  const warnings = new Set(["香港口语会因语境和说话习惯而不同，以下是规则生成的参考说法。"]);
+  let changeCount = 0;
+  const segments = splitIntoSegments(normalized).map((source, index) => {
+    const writtenText = toHongKongTraditional(source);
+    const converted = applyColloquialRules(writtenText);
+    changeCount += converted.changes.length;
+    const tokens = createTokens(converted.text);
+    if (tokens.some((token) => token.status === "unknown")) warnings.add("少数字词暂时无法标注粤拼，请结合朗读确认。");
+    return { id: `seg_${index + 1}`, source, writtenText, text: converted.text, changes: converted.changes, tokens };
+  });
+  if (changeCount === 0) warnings.add("这段内容暂时没有找到可安全转换的口语表达，已保留香港书面语。");
+  return {
+    requestId: crypto.randomUUID(),
+    expression: "colloquial",
+    sourceText: normalized,
+    writtenText: segments.map((segment) => segment.writtenText).join("\n"),
+    convertedText: segments.map((segment) => segment.text).join("\n"),
+    segments,
+    warnings: [...warnings],
+  };
+}
+
 export function handleConvertRequest(payload) {
   const expression = payload?.expression ?? "written";
   if (expression !== "written" && expression !== "colloquial") return { status: 400, body: { error: { code: "INVALID_EXPRESSION", message: "不支持这种表达方式。" } } };
-  if (expression === "colloquial") return { status: 501, body: { error: { code: "EXPRESSION_NOT_AVAILABLE", message: "香港口语功能正在准备中。" } } };
   if (typeof payload?.text !== "string") return { status: 400, body: { error: { code: "INVALID_TEXT", message: "请输入要转换的文字。" } } };
   const text = normalizeInput(payload.text);
   if (!text) return { status: 400, body: { error: { code: "EMPTY_TEXT", message: "先输入一段文字吧。" } } };
   if (Array.from(text).length > MAX_INPUT_LENGTH) return { status: 413, body: { error: { code: "TEXT_TOO_LONG", message: `一次最多可以转换 ${MAX_INPUT_LENGTH} 个字。` } } };
-  return { status: 200, body: convertWrittenText(text) };
+  return { status: 200, body: expression === "colloquial" ? convertColloquialText(text) : convertWrittenText(text) };
 }

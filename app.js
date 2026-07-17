@@ -5,10 +5,12 @@ const messageRegion = $("#message-region");
 const results = $("#results");
 const sentenceList = $("#sentence-list");
 const speechStatus = $("#speech-status");
+const modeButtons = [...document.querySelectorAll("[data-expression]")];
 const example = "老师说，我们明天八点半在图书馆集合。请带好数学作业和学生证！";
 let conversion = null;
 let cantoneseVoice = null;
 let speakingId = null;
+let expression = "written";
 
 function showMessage(text, kind = "error") {
   messageRegion.replaceChildren();
@@ -96,6 +98,9 @@ function renderToken(token) {
 
 function renderResult(data) {
   conversion = data;
+  const isColloquial = data.expression === "colloquial";
+  $("#result-title").textContent = isColloquial ? "香港口语参考说法" : "跟着粤拼读一读";
+  $("#copy-traditional").textContent = isColloquial ? "复制口语" : "复制繁体";
   sentenceList.replaceChildren();
   data.segments.forEach((segment, index) => {
     const card = document.createElement("article");
@@ -105,6 +110,14 @@ function renderResult(data) {
     number.textContent = String(index + 1).padStart(2, "0");
     const content = document.createElement("div");
     content.className = "sentence-content";
+    if (isColloquial) {
+      const reference = document.createElement("p");
+      reference.className = "written-reference";
+      const label = document.createElement("strong");
+      label.textContent = "书面语：";
+      reference.append(label, segment.writtenText);
+      content.append(reference);
+    }
     const tokens = document.createElement("div");
     tokens.className = "token-line";
     tokens.lang = "zh-HK";
@@ -121,7 +134,22 @@ function renderResult(data) {
     if (segment.tokens.some((token) => token.status === "unknown")) {
       const note = document.createElement("span"); note.className = "unknown-note"; note.textContent = "有字词暂未标音"; footer.append(note);
     }
-    content.append(tokens, footer);
+    content.append(tokens);
+    if (isColloquial && segment.changes.length) {
+      const changes = document.createElement("div");
+      changes.className = "change-list";
+      const changeLabel = document.createElement("strong");
+      changeLabel.textContent = "本句转换";
+      changes.append(changeLabel);
+      segment.changes.forEach((change) => {
+        const item = document.createElement("span");
+        item.textContent = `${change.from} → ${change.to}`;
+        item.title = change.description;
+        changes.append(item);
+      });
+      content.append(changes);
+    }
+    content.append(footer);
     card.append(number, content);
     sentenceList.append(card);
   });
@@ -139,7 +167,8 @@ async function convert() {
   showMessage("");
   window.speechSynthesis?.cancel();
   try {
-    const response = await fetch("/api/v1/convert", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: source.value, expression: "written" }) });
+    const requestedExpression = expression;
+    const response = await fetch("/api/v1/convert", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: source.value, expression: requestedExpression }) });
     const body = await response.json();
     if (!response.ok) throw new Error(body.error?.message ?? "转换失败，请稍后再试。");
     renderResult(body);
@@ -151,16 +180,33 @@ async function convert() {
   }
 }
 
+function selectExpression(nextExpression) {
+  expression = nextExpression;
+  modeButtons.forEach((button) => {
+    const active = button.dataset.expression === expression;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  $("#mode-help").textContent = expression === "colloquial"
+    ? "免费规则版会转换常见校园和日常说法；结果仅供学习参考。"
+    : "适合课文、通知和正式文字。";
+  window.speechSynthesis?.cancel();
+  conversion = null;
+  results.hidden = true;
+  showMessage("");
+}
+
 async function copy(value, label) {
   try { await navigator.clipboard.writeText(value); showMessage(`已复制${label}`, "success"); }
   catch { showMessage("复制没有成功，请手动选择文字复制。"); }
 }
 
 source.addEventListener("input", updateInputState);
+modeButtons.forEach((button) => button.addEventListener("click", () => selectExpression(button.dataset.expression)));
 $("#example-button").addEventListener("click", () => { source.value = example; updateInputState(); source.focus(); });
 $("#clear-button").addEventListener("click", () => { window.speechSynthesis?.cancel(); source.value = ""; conversion = null; results.hidden = true; showMessage(""); updateInputState(); source.focus(); });
 convertButton.addEventListener("click", convert);
-$("#copy-traditional").addEventListener("click", () => conversion && copy(conversion.convertedText, "繁体文字"));
+$("#copy-traditional").addEventListener("click", () => conversion && copy(conversion.convertedText, conversion.expression === "colloquial" ? "香港口语" : "繁体文字"));
 $("#copy-jyutping").addEventListener("click", () => conversion && copy(conversion.segments.flatMap((segment) => segment.tokens.flatMap((token) => token.jyutping)).join(" "), "粤拼"));
 refreshVoice();
 window.speechSynthesis?.addEventListener("voiceschanged", refreshVoice);

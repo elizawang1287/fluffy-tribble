@@ -32,9 +32,10 @@
             <button class="text-button" id="example-button" type="button">试试例句</button>
           </div>
           <div class="mode-switch" aria-label="表达方式">
-            <button type="button" class="active" aria-pressed="true">书面语</button>
-            <button type="button" disabled title="即将推出">香港口语 <small>即将推出</small></button>
+            <button type="button" class="active" aria-pressed="true" data-expression="written">书面语</button>
+            <button type="button" aria-pressed="false" data-expression="colloquial">香港口语 <small>规则版</small></button>
           </div>
+          <p class="mode-help" id="mode-help">适合课文、通知和正式文字。</p>
           <label class="sr-only" for="source-text">输入要转换的简体文字</label>
           <textarea id="source-text" maxlength="2000" placeholder="例如：老师说，我们明天八点半在图书馆集合。"></textarea>
           <div class="input-footer">

@@ -36,6 +36,16 @@ test("conversion endpoint returns structured tokens", () => withServer(async (or
   assert.ok(body.segments[0].tokens.length > 0);
 }));
 
+test("conversion endpoint supports Hong Kong colloquial mode", () => withServer(async (origin) => {
+  const response = await fetch(`${origin}/api/v1/convert`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "我们明天上课。", expression: "colloquial" }) });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.expression, "colloquial");
+  assert.equal(body.convertedText, "我哋聽日上堂。");
+  assert.equal(body.segments[0].writtenText, "我們明天上課。");
+  assert.ok(body.segments[0].changes.length > 0);
+}));
+
 test("does not expose arbitrary project files", () => withServer(async (origin) => {
   assert.equal((await fetch(`${origin}/package.json`)).status, 404);
   assert.equal((await fetch(`${origin}/work/npm-cache`)).status, 404);
