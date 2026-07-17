@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="为小学高年级和初中同学设计的香港繁体、粤拼和粤语朗读工具。">
+    <title>粤读校园｜简体转香港繁体与粤拼</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header class="site-header">
+        <a class="brand" href="#top" aria-label="粤读校园首页"><span class="brand-mark" aria-hidden="true">粤</span><span>粤读校园</span></a>
+        <span class="header-note">繁体 · 粤拼 · 朗读</span>
+      </header>
+
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">给刚到香港读书的你</p>
+          <h1>看得懂，<span>读得出。</span></h1>
+          <p class="hero-description">把简体课文、通知或消息变成香港繁体和粤拼，再逐句听一遍。</p>
+          <div class="steps" aria-label="使用步骤"><span><b>1</b> 贴文字</span><i aria-hidden="true"></i><span><b>2</b> 看粤拼</span><i aria-hidden="true"></i><span><b>3</b> 听朗读</span></div>
+        </div>
+        <div class="hero-sticker" aria-hidden="true"><strong>早晨！</strong><span>zou2 san4</span></div>
+      </section>
+
+      <section class="workspace" aria-labelledby="converter-title">
+        <div class="panel input-panel">
+          <div class="panel-heading">
+            <div><span class="step-label">第一步</span><h2 id="converter-title">输入简体文字</h2></div>
+            <button class="text-button" id="example-button" type="button">试试例句</button>
+          </div>
+          <div class="mode-switch" aria-label="表达方式">
+            <button type="button" class="active" aria-pressed="true">书面语</button>
+            <button type="button" disabled title="即将推出">香港口语 <small>即将推出</small></button>
+          </div>
+          <label class="sr-only" for="source-text">输入要转换的简体文字</label>
+          <textarea id="source-text" maxlength="2000" placeholder="例如：老师说，我们明天八点半在图书馆集合。"></textarea>
+          <div class="input-footer">
+            <span class="count" id="character-count">0 / 2000</span>
+            <div class="input-actions">
+              <button class="clear-button" id="clear-button" type="button">清空</button>
+              <button class="primary-button" id="convert-button" type="button" disabled>开始转换 <span aria-hidden="true">→</span></button>
+            </div>
+          </div>
+          <div id="message-region" aria-live="polite"></div>
+        </div>
+        <aside class="privacy-note"><span aria-hidden="true">✓</span><p><strong>放心使用</strong> 输入内容只在你的设备和本地服务中处理，不会保存。</p></aside>
+      </section>
+
+      <section class="results" id="results" aria-labelledby="result-title" hidden>
+        <div class="results-heading">
+          <div><span class="step-label">第二步</span><h2 id="result-title">跟着粤拼读一读</h2></div>
+          <div class="result-actions">
+            <label for="speech-rate">语速 <select id="speech-rate"><option value="0.7">慢速 0.7×</option><option value="0.85" selected>适中 0.85×</option><option value="1">正常 1×</option></select></label>
+            <button type="button" id="copy-traditional">复制繁体</button>
+            <button type="button" id="copy-jyutping">复制粤拼</button>
+          </div>
+        </div>
+        <div class="speech-status checking" id="speech-status"><span aria-hidden="true">○</span><span>正在检查粤语声音…</span></div>
+        <div class="sentence-list" id="sentence-list"></div>
+        <div id="result-warnings"></div>
+        <div class="tone-legend" aria-label="粤拼声调颜色说明"><strong>声调颜色</strong><span class="tone-dot tone-bg-1">1</span><span class="tone-dot tone-bg-2">2</span><span class="tone-dot tone-bg-3">3</span><span class="tone-dot tone-bg-4">4</span><span class="tone-dot tone-bg-5">5</span><span class="tone-dot tone-bg-6">6</span><small>颜色只是帮助辨认，数字才是声调。</small></div>
+      </section>
+
+      <footer><strong>粤读校园</strong><span>学习工具可能偶有标音误差，重要内容请向老师确认。</span></footer>
+    </main>
+  </body>
+</html>

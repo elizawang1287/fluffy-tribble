@@ -1,0 +1,14 @@
+{
+  "name": "jyut-campus",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --preserve-symlinks --preserve-symlinks-main server.mjs",
+    "start": "node --preserve-symlinks --preserve-symlinks-main server.mjs",
+    "test": "node --preserve-symlinks --preserve-symlinks-main --test tests/*.test.mjs"
+  }
+}
