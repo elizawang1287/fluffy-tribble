@@ -16,9 +16,21 @@ const pronunciationOverrides = {
   放學: "fong3 hok6",
 };
 
+// Only group words whose boundaries are useful and dependable in a school
+// context. Anything else is shown character by character instead of trusting
+// a general-purpose Chinese segmenter that may choose the wrong meaning.
+const highConfidenceTerms = [
+  "學生證", "圖書館", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日",
+  "班主任", "普通話", "體育課", "音樂課", "數學課", "中文課", "英文課",
+  "老師", "同學", "學生", "學校", "課室", "教室", "操場", "禮堂", "校服",
+  "功課", "作業", "上課", "下課", "放學", "小息", "考試", "測驗", "默書", "集合",
+  "中文", "英文", "數學", "常識", "音樂", "體育", "今天", "明天", "昨天",
+  "早上", "上午", "中午", "下午", "晚上", "八點半", "我們", "你們", "他們",
+  "銀行", "行路", "快樂", "分數",
+].sort((left, right) => Array.from(right).length - Array.from(left).length);
+
 const toHongKongTraditional = OpenCC.Converter({ from: "cn", to: "hk" });
 const jyutpingConverter = ToJyutping.customize(pronunciationOverrides);
-const wordSegmenter = new Intl.Segmenter("zh-HK", { granularity: "word" });
 
 export function normalizeInput(input) {
   return input.normalize("NFC").replace(/\r\n?/g, "\n").replace(/[\t\f\v]+/g, " ").replace(/ {2,}/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -63,21 +75,38 @@ export function splitIntoSegments(input) {
 
 function createTokens(text) {
   const fullReadings = jyutpingConverter.getJyutpingList(text);
+  const characters = Array.from(text);
   const tokens = [];
-  let readingIndex = 0;
+  let characterIndex = 0;
   let sourceIndex = 0;
-  for (const item of wordSegmenter.segment(text)) {
-    const tokenText = item.segment;
-    const characterCount = Array.from(tokenText).length;
-    const readings = fullReadings.slice(readingIndex, readingIndex + characterCount);
-    readingIndex += characterCount;
+
+  while (characterIndex < characters.length) {
+    const remainingText = characters.slice(characterIndex).join("");
+    const matchedTerm = highConfidenceTerms.find((term) => remainingText.startsWith(term));
+    let tokenCharacters;
+
+    if (matchedTerm) {
+      tokenCharacters = Array.from(matchedTerm);
+    } else if (/^[\p{Letter}\p{Number}]$/u.test(characters[characterIndex]) && !/\p{Script=Han}/u.test(characters[characterIndex])) {
+      let end = characterIndex + 1;
+      while (end < characters.length && /^[\p{Letter}\p{Number}]$/u.test(characters[end]) && !/\p{Script=Han}/u.test(characters[end])) end += 1;
+      tokenCharacters = characters.slice(characterIndex, end);
+    } else {
+      tokenCharacters = [characters[characterIndex]];
+    }
+
+    const tokenText = tokenCharacters.join("");
+    const readings = fullReadings.slice(characterIndex, characterIndex + tokenCharacters.length);
     const jyutping = readings.flatMap(([, value]) => value ? value.split(/\s+/).filter(Boolean) : []);
     const hasChinese = /\p{Script=Han}/u.test(tokenText);
-    let status = hasChinese && jyutping.length === 0 ? "unknown" : "generated";
+    const hasUnreadChinese = readings.some(([character, value]) => /\p{Script=Han}/u.test(character) && !value);
+    let status = hasChinese && hasUnreadChinese ? "unknown" : "generated";
     if (Object.hasOwn(pronunciationOverrides, tokenText)) status = "overridden";
     tokens.push({ text: tokenText, start: sourceIndex, end: sourceIndex + tokenText.length, jyutping, status });
+    characterIndex += tokenCharacters.length;
     sourceIndex += tokenText.length;
   }
+
   return tokens;
 }
 

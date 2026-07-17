@@ -22,6 +22,24 @@ test("converts simplified Chinese and generates Jyutping", () => {
   assert.ok(result.segments[1].tokens.flatMap((token) => token.jyutping).includes("hong4"));
 });
 
+test("uses conservative school-term grouping for ambiguous sentences", () => {
+  const result = convertWrittenText("老师说明天上课。");
+  const tokens = result.segments[0].tokens;
+  assert.deepEqual(tokens.map((token) => token.text), ["老師", "説", "明天", "上課", "。。"]);
+  assert.deepEqual(tokens.flatMap((token) => token.jyutping), ["lou5", "si1", "syut3", "ming4", "tin1", "soeng5", "fo3"]);
+});
+
+test("keeps token offsets intact with non-BMP characters", () => {
+  const result = convertWrittenText("😊老师明天。");
+  const tokens = result.segments[0].tokens;
+  assert.deepEqual(tokens.map(({ text, start, end }) => ({ text, start, end })), [
+    { text: "😊", start: 0, end: 2 },
+    { text: "老師", start: 2, end: 4 },
+    { text: "明天", start: 4, end: 6 },
+    { text: "。", start: 6, end: 7 },
+  ]);
+});
+
 test("validates modes, blank content and length", () => {
   assert.equal(handleConvertRequest({ text: "你好", expression: "colloquial" }).status, 501);
   assert.equal(handleConvertRequest({ text: "   ", expression: "written" }).status, 400);
