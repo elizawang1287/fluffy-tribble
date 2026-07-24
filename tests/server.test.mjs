@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "../server.mjs";
 
-async function withServer(run) {
-  const server = createServer();
+async function withServer(run, options) {
+  const server = createServer(options);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
     const { port } = server.address();
@@ -26,6 +26,23 @@ test("exposes a health check for the hosting platform", () => withServer(async (
   const response = await fetch(`${origin}/health`);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: "ok" });
+}));
+
+test("serves the daily news archive", () => withServer(async (origin) => {
+  const response = await fetch(`${origin}/api/v1/news`);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.items[0].title, "校園科學日");
+  assert.equal(body.maxDays, 30);
+}, {
+  newsService: {
+    getArchive: async () => ({
+      version: 1,
+      maxDays: 30,
+      status: "remote",
+      items: [{ date: "2026-07-24", title: "校園科學日", summary: "學生參加科學活動。" }],
+    }),
+  },
 }));
 
 test("conversion endpoint returns structured tokens", () => withServer(async (origin) => {

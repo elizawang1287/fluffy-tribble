@@ -4,6 +4,7 @@ import { createServer as createHttpServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { handleConvertRequest } from "./conversion-core.mjs";
+import { createNewsService } from "./news-service.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
@@ -18,8 +19,8 @@ const staticFiles = new Map([
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
 ]);
 
-function sendJson(response, status, body) {
-  response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+function sendJson(response, status, body, cacheControl = "no-store") {
+  response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": cacheControl, "x-content-type-options": "nosniff" });
   response.end(JSON.stringify(body));
 }
 
@@ -58,7 +59,7 @@ async function readJson(request, maxBytes = 32_000) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-export function createServer() {
+export function createServer({ newsService = createNewsService() } = {}) {
   return createHttpServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname === "/health" && request.method === "GET") {
@@ -78,6 +79,14 @@ export function createServer() {
       } catch (error) {
         const status = error?.status === 413 ? 413 : 400;
         sendJson(response, status, { error: { code: status === 413 ? "REQUEST_TOO_LARGE" : "INVALID_JSON", message: status === 413 ? "请求内容过长。" : "请求内容不是有效的 JSON。" } });
+      }
+      return;
+    }
+    if (url.pathname === "/api/v1/news" && request.method === "GET") {
+      try {
+        sendJson(response, 200, await newsService.getArchive(), "public, max-age=300");
+      } catch {
+        sendJson(response, 503, { error: { code: "NEWS_UNAVAILABLE", message: "新聞暫時未能載入，請稍後再試。" } });
       }
       return;
     }

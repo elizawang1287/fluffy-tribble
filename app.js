@@ -11,6 +11,9 @@ let conversion = null;
 let cantoneseVoice = null;
 let speakingId = null;
 let expression = "written";
+let newsItems = [];
+let activeNews = null;
+const newsConversions = new Map();
 
 function showMessage(text, kind = "error") {
   messageRegion.replaceChildren();
@@ -42,6 +45,8 @@ function refreshVoice() {
   speechStatus.firstElementChild.textContent = cantoneseVoice ? "●" : "○";
   speechStatus.lastElementChild.textContent = cantoneseVoice ? `已找到香港粤语声音：${cantoneseVoice.name}` : "未找到香港粤语声音；仍可查看繁体和粤拼";
   document.querySelectorAll(".speak-button").forEach((button) => { button.disabled = !cantoneseVoice; });
+  const newsSpeak = $("#news-speak");
+  if (newsSpeak) newsSpeak.disabled = !cantoneseVoice || !activeNews;
 }
 
 function setSpeechUnavailable() {
@@ -94,6 +99,128 @@ function renderToken(token) {
     wrapper.append(reading);
   }
   return wrapper;
+}
+
+function formatNewsDate(date) {
+  const parsed = new Date(`${date}T00:00:00+08:00`);
+  return Number.isNaN(parsed.valueOf())
+    ? date
+    : new Intl.DateTimeFormat("zh-HK", { month: "long", day: "numeric", weekday: "short" }).format(parsed);
+}
+
+async function convertNews(item) {
+  const tokenList = $("#news-token-list");
+  if (newsConversions.has(item.date)) {
+    renderNewsTokens(newsConversions.get(item.date));
+    return;
+  }
+  tokenList.innerHTML = '<p class="news-loading">正在生成粤拼…</p>';
+  try {
+    const response = await fetch("/api/v1/convert", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: `${item.title}。${item.summary}`, expression: "written" }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message);
+    newsConversions.set(item.date, data);
+    if (activeNews?.date === item.date) renderNewsTokens(data);
+  } catch {
+    tokenList.innerHTML = '<p class="news-loading">粤拼暂时未能生成，请稍后再试。</p>';
+  }
+}
+
+function renderNewsTokens(data) {
+  const tokenList = $("#news-token-list");
+  tokenList.replaceChildren();
+  data.segments.forEach((segment) => {
+    const line = document.createElement("div");
+    line.className = "news-token-line";
+    line.lang = "zh-HK";
+    segment.tokens.forEach((token) => line.append(renderToken(token)));
+    tokenList.append(line);
+  });
+}
+
+function selectNews(item) {
+  activeNews = item;
+  $("#news-category").textContent = item.category;
+  $("#news-date").dateTime = item.date;
+  $("#news-date").textContent = formatNewsDate(item.date);
+  $("#news-title").textContent = item.title;
+  $("#news-summary").textContent = item.summary;
+  $("#news-source").textContent = `来源：${item.source}`;
+  const sourceLink = $("#news-source-link");
+  sourceLink.hidden = !item.sourceUrl;
+  if (item.sourceUrl) sourceLink.href = item.sourceUrl;
+  $("#news-speak").disabled = !cantoneseVoice;
+  document.querySelectorAll(".history-item").forEach((button) => {
+    button.classList.toggle("active", button.dataset.date === item.date);
+  });
+  convertNews(item);
+}
+
+function renderNewsHistory() {
+  const list = $("#news-history-list");
+  list.replaceChildren();
+  newsItems.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "history-item";
+    button.dataset.date = item.date;
+    const date = document.createElement("time");
+    date.dateTime = item.date;
+    date.textContent = formatNewsDate(item.date);
+    const title = document.createElement("span");
+    title.textContent = item.title;
+    button.append(date, title);
+    button.addEventListener("click", () => selectNews(item));
+    list.append(button);
+  });
+}
+
+function speakNews() {
+  if (!activeNews || !cantoneseVoice) return;
+  const button = $("#news-speak");
+  speechSynthesis.cancel();
+  if (speakingId === `news-${activeNews.date}`) {
+    speakingId = null;
+    button.innerHTML = '<span aria-hidden="true">▶</span> 粤语朗读';
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(`${activeNews.title}。${activeNews.summary}`);
+  utterance.voice = cantoneseVoice;
+  utterance.lang = cantoneseVoice.lang;
+  utterance.rate = Number($("#speech-rate").value);
+  speakingId = `news-${activeNews.date}`;
+  button.innerHTML = '<span aria-hidden="true">■</span> 停止';
+  utterance.onend = () => {
+    speakingId = null;
+    button.innerHTML = '<span aria-hidden="true">▶</span> 粤语朗读';
+  };
+  utterance.onerror = () => {
+    speakingId = null;
+    button.innerHTML = '<span aria-hidden="true">▶</span> 粤语朗读';
+    $("#news-error").textContent = "朗读没有成功，请检查设备是否安装了“粤语（香港）”声音。";
+  };
+  speechSynthesis.speak(utterance);
+}
+
+async function loadNews() {
+  try {
+    const response = await fetch("/api/v1/news");
+    const data = await response.json();
+    if (!response.ok || !data.items?.length) throw new Error(data.error?.message);
+    newsItems = data.items;
+    renderNewsHistory();
+    selectNews(newsItems[0]);
+    if (data.status === "fallback") $("#news-error").textContent = "新闻源暂时未更新，当前显示的是备用提示。";
+  } catch {
+    $("#news-title").textContent = "今天的新闻暂时未能载入";
+    $("#news-summary").textContent = "文字转换功能仍可正常使用，请稍后再回来看看。";
+    $("#news-token-list").innerHTML = '<p class="news-loading">暂无内容</p>';
+    $("#news-error").textContent = "新闻服务连接失败。";
+  }
 }
 
 function renderResult(data) {
@@ -208,6 +335,14 @@ $("#clear-button").addEventListener("click", () => { window.speechSynthesis?.can
 convertButton.addEventListener("click", convert);
 $("#copy-traditional").addEventListener("click", () => conversion && copy(conversion.convertedText, conversion.expression === "colloquial" ? "香港口语" : "繁体文字"));
 $("#copy-jyutping").addEventListener("click", () => conversion && copy(conversion.segments.flatMap((segment) => segment.tokens.flatMap((token) => token.jyutping)).join(" "), "粤拼"));
+$("#news-speak").addEventListener("click", speakNews);
+$("#news-history-toggle").addEventListener("click", () => {
+  const history = $("#news-history");
+  history.hidden = !history.hidden;
+  $("#news-history-toggle").setAttribute("aria-expanded", String(!history.hidden));
+  $("#news-history-toggle").textContent = history.hidden ? "查看往期" : "收起往期";
+});
 refreshVoice();
+loadNews();
 window.speechSynthesis?.addEventListener("voiceschanged", refreshVoice);
 window.addEventListener("pagehide", () => window.speechSynthesis?.cancel());

@@ -25,6 +25,40 @@
         <div class="hero-sticker" aria-hidden="true"><strong>早晨！</strong><span>zou2 san4</span></div>
       </section>
 
+      <section class="daily-news" aria-labelledby="daily-news-heading">
+        <div class="news-heading">
+          <div>
+            <p class="eyebrow">每天认识一点香港</p>
+            <h2 id="daily-news-heading">今日短新闻</h2>
+          </div>
+          <button class="history-toggle" id="news-history-toggle" type="button" aria-expanded="false" aria-controls="news-history">查看往期</button>
+        </div>
+        <div class="news-layout">
+          <article class="news-card" id="news-card" aria-live="polite">
+            <div class="news-meta"><span id="news-category">加载中</span><time id="news-date"></time></div>
+            <h3 id="news-title">正在准备今天的短新闻…</h3>
+            <p class="news-summary" id="news-summary">每天一篇适合学生阅读的香港短新闻。</p>
+            <div class="news-source-row">
+              <span id="news-source"></span>
+              <a id="news-source-link" href="#" target="_blank" rel="noopener noreferrer" hidden>查看原文 ↗</a>
+            </div>
+            <div class="news-actions">
+              <button class="news-speak-button" id="news-speak" type="button" disabled><span aria-hidden="true">▶</span> 粤语朗读</button>
+              <span>新闻内容保持书面语，避免改变事实。</span>
+            </div>
+          </article>
+          <div class="news-learning" id="news-learning">
+            <p class="news-learning-label">繁体与粤拼</p>
+            <div id="news-token-list"><p class="news-loading">正在生成粤拼…</p></div>
+          </div>
+        </div>
+        <div class="news-history" id="news-history" hidden>
+          <h3>最近 30 天</h3>
+          <div id="news-history-list"></div>
+        </div>
+        <p class="news-error" id="news-error" role="status"></p>
+      </section>
+
       <section class="workspace" aria-labelledby="converter-title">
         <div class="panel input-panel">
           <div class="panel-heading">
