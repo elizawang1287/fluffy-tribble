@@ -34,6 +34,11 @@ test("rejects unsafe URLs and blocked-only news", () => {
   assert.equal(selectDailyNews(parseRss(rss).slice(1), "2026-07-24"), null);
 });
 
+test("does not select news older than 72 hours", () => {
+  const items = parseRss(rss).map((item) => ({ ...item, publishedAt: "Mon, 20 Jul 2026 05:17:49 +0800" }));
+  assert.equal(selectDailyNews(items, "2026-07-24"), null);
+});
+
 test("shortens summaries at a sentence boundary", () => {
   const text = `${"這是一段適合學生閱讀的新聞內容，".repeat(8)}第一段完結。${"後續內容".repeat(30)}`;
   const shortened = shortenSummary(text);

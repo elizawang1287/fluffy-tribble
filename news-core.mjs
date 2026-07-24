@@ -16,8 +16,8 @@ const BLOCKED_TOPICS = [
 const CATEGORY_RULES = [
   ["教育", ["學校", "學生", "教育", "中學", "小學", "學習", "閱讀", "考試"]],
   ["科學", ["科學", "科技", "創新", "機械人", "天文", "太空", "環保", "氣候"]],
-  ["文化", ["文化", "藝術", "博物館", "歷史", "音樂"]],
   ["體育", ["體育", "運動", "比賽", "足球", "游泳"]],
+  ["文化", ["文化", "藝術", "博物館", "歷史", "音樂"]],
   ["生活", ["健康", "天氣", "交通", "青年"]],
 ];
 
@@ -83,6 +83,13 @@ function categoryFor(item) {
   return CATEGORY_RULES.find(([, words]) => words.some((word) => text.includes(word)))?.[0] ?? "生活";
 }
 
+function isRecent(item, date, maxAgeHours = 72) {
+  const publishedAt = Date.parse(item.publishedAt);
+  if (Number.isNaN(publishedAt)) return true;
+  const endOfDay = Date.parse(`${date}T23:59:59+08:00`);
+  return publishedAt <= endOfDay && publishedAt >= endOfDay - maxAgeHours * 60 * 60 * 1000;
+}
+
 export function shortenSummary(value, maxLength = MAX_SUMMARY_LENGTH) {
   const text = cleanText(value);
   if (text.length <= maxLength) return text;
@@ -99,7 +106,7 @@ export function shortenSummary(value, maxLength = MAX_SUMMARY_LENGTH) {
 export function selectDailyNews(items, date) {
   const ranked = items
     .map((item, index) => ({ item, index, score: scoreCandidate(item) }))
-    .filter(({ score }) => score > 0)
+    .filter(({ item, score }) => score > 0 && isRecent(item, date))
     .sort((a, b) => b.score - a.score || a.index - b.index);
   if (!ranked.length) return null;
   const selected = ranked[0].item;
