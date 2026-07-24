@@ -7,3 +7,6 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     autoDeployTrigger: commit
+    buildFilter:
+      ignoredPaths:
+        - data/news/**
