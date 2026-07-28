@@ -43,7 +43,19 @@
               <a id="news-source-link" href="#" target="_blank" rel="noopener noreferrer" hidden>查看原文 ↗</a>
             </div>
             <div class="news-actions">
-              <button class="news-speak-button" id="news-speak" type="button" disabled><span aria-hidden="true">▶</span> 粤语朗读</button>
+              <div class="speech-controls">
+                <button class="news-speak-button" id="news-speak" type="button" disabled><span aria-hidden="true">▶</span> 粤语朗读</button>
+                <label for="news-speech-voice">声音
+                  <select id="news-speech-voice" data-speech-voice disabled><option value="">自动选择</option></select>
+                </label>
+                <label for="news-speech-rate">语速
+                  <select id="news-speech-rate" data-speech-rate>
+                    <option value="0.75">慢速 0.75×</option>
+                    <option value="0.92" selected>自然 0.92×</option>
+                    <option value="1">正常 1×</option>
+                  </select>
+                </label>
+              </div>
               <span>新闻内容保持书面语，避免改变事实。</span>
             </div>
           </article>
@@ -88,7 +100,16 @@
         <div class="results-heading">
           <div><span class="step-label">第二步</span><h2 id="result-title">跟着粤拼读一读</h2></div>
           <div class="result-actions">
-            <label for="speech-rate">语速 <select id="speech-rate"><option value="0.7">慢速 0.7×</option><option value="0.85" selected>适中 0.85×</option><option value="1">正常 1×</option></select></label>
+            <label for="result-speech-voice">声音
+              <select id="result-speech-voice" data-speech-voice disabled><option value="">自动选择</option></select>
+            </label>
+            <label for="result-speech-rate">语速
+              <select id="result-speech-rate" data-speech-rate>
+                <option value="0.75">慢速 0.75×</option>
+                <option value="0.92" selected>自然 0.92×</option>
+                <option value="1">正常 1×</option>
+              </select>
+            </label>
             <button type="button" id="copy-traditional">复制繁体</button>
             <button type="button" id="copy-jyutping">复制粤拼</button>
           </div>

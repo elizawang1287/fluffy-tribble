@@ -126,11 +126,17 @@ textarea:focus { border-color: var(--indigo); box-shadow: 0 0 0 4px rgba(68,86,1
 .result-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .result-actions label { color: var(--muted); font-size: 13px; }
 .result-actions select, .result-actions button { margin-left: 5px; border: 1px solid #cbc9bf; border-radius: 9px; background: var(--paper); padding: 8px 10px; font-size: 13px; cursor: pointer; }
+.speech-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.speech-controls label { color: var(--muted); font-size: 12px; }
+.speech-controls select { margin-left: 4px; max-width: 190px; border: 1px solid #cbc9bf; border-radius: 8px; background: var(--paper); padding: 7px 8px; color: var(--ink); font-size: 12px; }
+.speech-controls select:disabled, .result-actions select:disabled { opacity: .55; cursor: not-allowed; }
 .speech-status { display: flex; align-items: center; gap: 8px; margin-bottom: 13px; color: #7a5c24; font-size: 13px; }
 .speech-status.ready { color: #28704d; }
 .speech-status span { font-size: 11px; }
 .sentence-list { display: grid; gap: 14px; }
 .sentence-card { display: grid; grid-template-columns: 52px 1fr; background: var(--paper); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: 0 8px 25px rgba(44,54,103,.06); }
+.sentence-card.speaking { border-color: #8994e2; box-shadow: 0 0 0 3px rgba(68,86,199,.11), 0 8px 25px rgba(44,54,103,.08); }
+.news-card .speaking { border-radius: 7px; background: #fff0b8; box-shadow: 0 0 0 4px #fff0b8; }
 .sentence-number { display: grid; place-items: start center; padding-top: 25px; background: #eeeffb; color: var(--indigo); font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; }
 .sentence-content { min-width: 0; padding: 24px; }
 .written-reference { margin: 0 0 16px; padding: 10px 12px; border-radius: 10px; background: #f3f1e9; color: var(--muted); font-size: 13px; line-height: 1.6; }

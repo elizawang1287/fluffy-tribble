@@ -1,3 +1,5 @@
+import { createSpeechPlan, rankCantoneseVoices } from "./speech-core.mjs";
+
 const $ = (selector) => document.querySelector(selector);
 const source = $("#source-text");
 const convertButton = $("#convert-button");
@@ -9,6 +11,11 @@ const modeButtons = [...document.querySelectorAll("[data-expression]")];
 const example = "老师说，我们明天八点半在图书馆集合。请带好数学作业和学生证！";
 let conversion = null;
 let cantoneseVoice = null;
+let cantoneseVoices = [];
+let selectedVoiceKey = "";
+let speechRate = 0.92;
+let speechRunId = 0;
+let speechPauseTimer = null;
 let speakingId = null;
 let expression = "written";
 let newsItems = [];
@@ -33,24 +40,79 @@ function updateInputState() {
   convertButton.disabled = !source.value.trim();
 }
 
-function isCantoneseVoice(voice) {
-  const lang = voice.lang.toLowerCase();
-  return lang === "yue-hk" || lang === "zh-hk" || /cantonese|廣東話|粤语|粵語|香港/i.test(voice.name);
+function voiceKey(voice) {
+  if (!voice) return "";
+  return voice?.voiceURI || `${voice?.name ?? ""}|${voice?.lang ?? ""}`;
+}
+
+function setSpeakButtonState(button, playing) {
+  const idleLabel = button.id === "news-speak" ? "粤语朗读" : "播放本句";
+  button.innerHTML = `<span aria-hidden="true">${playing ? "■" : "▶"}</span> ${playing ? "停止" : idleLabel}`;
+}
+
+function clearSpeechHighlights() {
+  document.querySelectorAll(".speaking").forEach((element) => element.classList.remove("speaking"));
+}
+
+function resetSpeechButtons() {
+  document.querySelectorAll(".speak-button").forEach((button) => setSpeakButtonState(button, false));
+  const newsSpeak = $("#news-speak");
+  if (newsSpeak) setSpeakButtonState(newsSpeak, false);
+}
+
+function stopSpeaking() {
+  speechRunId += 1;
+  if (speechPauseTimer) clearTimeout(speechPauseTimer);
+  speechPauseTimer = null;
+  speakingId = null;
+  window.speechSynthesis?.cancel();
+  clearSpeechHighlights();
+  resetSpeechButtons();
+}
+
+function updateVoiceControls() {
+  document.querySelectorAll("[data-speech-voice]").forEach((select) => {
+    const fragment = document.createDocumentFragment();
+    if (cantoneseVoices.length === 0) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "未找到粤语声音";
+      fragment.append(option);
+    } else {
+      cantoneseVoices.forEach((voice, index) => {
+        const option = document.createElement("option");
+        option.value = voiceKey(voice);
+        option.textContent = `${index === 0 ? "推荐 · " : ""}${voice.name}`;
+        fragment.append(option);
+      });
+    }
+    select.replaceChildren(fragment);
+    select.disabled = cantoneseVoices.length === 0;
+    if (cantoneseVoice) select.value = voiceKey(cantoneseVoice);
+  });
 }
 
 function refreshVoice() {
   if (!("speechSynthesis" in window)) return setSpeechUnavailable();
-  cantoneseVoice = speechSynthesis.getVoices().find(isCantoneseVoice) ?? null;
+  const previousVoiceKey = voiceKey(cantoneseVoice);
+  cantoneseVoices = rankCantoneseVoices(speechSynthesis.getVoices());
+  cantoneseVoice = cantoneseVoices.find((voice) => voiceKey(voice) === selectedVoiceKey) ?? cantoneseVoices[0] ?? null;
+  selectedVoiceKey = voiceKey(cantoneseVoice);
+  if (previousVoiceKey && previousVoiceKey !== selectedVoiceKey) stopSpeaking();
+  updateVoiceControls();
   speechStatus.className = `speech-status ${cantoneseVoice ? "ready" : "unavailable"}`;
   speechStatus.firstElementChild.textContent = cantoneseVoice ? "●" : "○";
-  speechStatus.lastElementChild.textContent = cantoneseVoice ? `已找到香港粤语声音：${cantoneseVoice.name}` : "未找到香港粤语声音；仍可查看繁体和粤拼";
+  speechStatus.lastElementChild.textContent = cantoneseVoice ? `正在使用：${cantoneseVoice.name}（已优化断句）` : "未找到香港粤语声音；仍可查看繁体和粤拼";
   document.querySelectorAll(".speak-button").forEach((button) => { button.disabled = !cantoneseVoice; });
   const newsSpeak = $("#news-speak");
   if (newsSpeak) newsSpeak.disabled = !cantoneseVoice || !activeNews;
 }
 
 function setSpeechUnavailable() {
+  stopSpeaking();
   cantoneseVoice = null;
+  cantoneseVoices = [];
+  updateVoiceControls();
   speechStatus.className = "speech-status unavailable";
   speechStatus.lastElementChild.textContent = "当前浏览器不支持语音朗读；仍可查看繁体和粤拼";
 }
@@ -60,24 +122,55 @@ function toneClass(syllable) {
   return tone ? `tone-${tone}` : "";
 }
 
+function playSpeechPlan({ id, plan, button, highlight, onError }) {
+  if (!cantoneseVoice || plan.length === 0) return;
+  if (speakingId === id) return stopSpeaking();
+  stopSpeaking();
+  speakingId = id;
+  const runId = speechRunId;
+  setSpeakButtonState(button, true);
+
+  const playPart = (index) => {
+    if (runId !== speechRunId || speakingId !== id) return;
+    if (index >= plan.length) {
+      stopSpeaking();
+      return;
+    }
+    const part = plan[index];
+    const utterance = new SpeechSynthesisUtterance(part.text);
+    utterance.voice = cantoneseVoice;
+    utterance.lang = cantoneseVoice.lang;
+    utterance.rate = Math.min(1.2, Math.max(0.6, speechRate * part.rateMultiplier));
+    utterance.pitch = part.pitch;
+    utterance.onstart = () => {
+      if (runId !== speechRunId) return;
+      clearSpeechHighlights();
+      highlight?.(part)?.classList.add("speaking");
+    };
+    utterance.onend = () => {
+      if (runId !== speechRunId) return;
+      speechPauseTimer = setTimeout(() => playPart(index + 1), part.pauseMs);
+    };
+    utterance.onerror = (event) => {
+      if (runId !== speechRunId || event.error === "canceled") return;
+      stopSpeaking();
+      onError?.();
+    };
+    speechSynthesis.speak(utterance);
+  };
+
+  playPart(0);
+}
+
 function speak(segment, button) {
   if (!cantoneseVoice) return showMessage("当前设备没有香港粤语声音，请在系统设置中添加“粤语（香港）”。");
-  speechSynthesis.cancel();
-  if (speakingId === segment.id) {
-    speakingId = null;
-    button.innerHTML = '<span aria-hidden="true">▶</span> 播放本句';
-    return;
-  }
-  document.querySelectorAll(".speak-button").forEach((item) => { item.innerHTML = '<span aria-hidden="true">▶</span> 播放本句'; });
-  const utterance = new SpeechSynthesisUtterance(segment.text);
-  utterance.voice = cantoneseVoice;
-  utterance.lang = cantoneseVoice.lang;
-  utterance.rate = Number($("#speech-rate").value);
-  utterance.onend = () => { speakingId = null; button.innerHTML = '<span aria-hidden="true">▶</span> 播放本句'; };
-  utterance.onerror = () => { speakingId = null; showMessage("朗读没有成功，请检查设备的粤语声音设置。"); };
-  speakingId = segment.id;
-  button.innerHTML = '<span aria-hidden="true">■</span> 停止';
-  speechSynthesis.speak(utterance);
+  playSpeechPlan({
+    id: segment.id,
+    plan: createSpeechPlan(segment.text),
+    button,
+    highlight: () => button.closest(".sentence-card"),
+    onError: () => showMessage("朗读没有成功，请检查设备的粤语声音设置。"),
+  });
 }
 
 function renderToken(token) {
@@ -143,6 +236,7 @@ function renderNewsTokens(data) {
 }
 
 function selectNews(item) {
+  if (speakingId?.startsWith("news-")) stopSpeaking();
   activeNews = item;
   $("#news-category").textContent = item.category;
   $("#news-date").dateTime = item.date;
@@ -182,28 +276,17 @@ function renderNewsHistory() {
 function speakNews() {
   if (!activeNews || !cantoneseVoice) return;
   const button = $("#news-speak");
-  speechSynthesis.cancel();
-  if (speakingId === `news-${activeNews.date}`) {
-    speakingId = null;
-    button.innerHTML = '<span aria-hidden="true">▶</span> 粤语朗读';
-    return;
-  }
-  const utterance = new SpeechSynthesisUtterance(`${activeNews.title}。${activeNews.summary}`);
-  utterance.voice = cantoneseVoice;
-  utterance.lang = cantoneseVoice.lang;
-  utterance.rate = Number($("#speech-rate").value);
-  speakingId = `news-${activeNews.date}`;
-  button.innerHTML = '<span aria-hidden="true">■</span> 停止';
-  utterance.onend = () => {
-    speakingId = null;
-    button.innerHTML = '<span aria-hidden="true">▶</span> 粤语朗读';
-  };
-  utterance.onerror = () => {
-    speakingId = null;
-    button.innerHTML = '<span aria-hidden="true">▶</span> 粤语朗读';
-    $("#news-error").textContent = "朗读没有成功，请检查设备是否安装了“粤语（香港）”声音。";
-  };
-  speechSynthesis.speak(utterance);
+  const titlePlan = createSpeechPlan(activeNews.title, { section: "title" });
+  const summaryPlan = createSpeechPlan(activeNews.summary);
+  playSpeechPlan({
+    id: `news-${activeNews.date}`,
+    plan: [...titlePlan, ...summaryPlan],
+    button,
+    highlight: (part) => part.section === "title" ? $("#news-title") : $("#news-summary"),
+    onError: () => {
+      $("#news-error").textContent = "朗读没有成功，请检查设备是否安装了“粤语（香港）”声音。";
+    },
+  });
 }
 
 async function loadNews() {
@@ -292,7 +375,7 @@ async function convert() {
   convertButton.disabled = true;
   convertButton.firstChild.textContent = "正在转换… ";
   showMessage("");
-  window.speechSynthesis?.cancel();
+  stopSpeaking();
   try {
     const requestedExpression = expression;
     const response = await fetch("/api/v1/convert", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: source.value, expression: requestedExpression }) });
@@ -317,7 +400,7 @@ function selectExpression(nextExpression) {
   $("#mode-help").textContent = expression === "colloquial"
     ? "免费规则版会转换常见校园和日常说法；结果仅供学习参考。"
     : "适合课文、通知和正式文字。";
-  window.speechSynthesis?.cancel();
+  stopSpeaking();
   conversion = null;
   results.hidden = true;
   showMessage("");
@@ -331,11 +414,24 @@ async function copy(value, label) {
 source.addEventListener("input", updateInputState);
 modeButtons.forEach((button) => button.addEventListener("click", () => selectExpression(button.dataset.expression)));
 $("#example-button").addEventListener("click", () => { source.value = example; updateInputState(); source.focus(); });
-$("#clear-button").addEventListener("click", () => { window.speechSynthesis?.cancel(); source.value = ""; conversion = null; results.hidden = true; showMessage(""); updateInputState(); source.focus(); });
+$("#clear-button").addEventListener("click", () => { stopSpeaking(); source.value = ""; conversion = null; results.hidden = true; showMessage(""); updateInputState(); source.focus(); });
 convertButton.addEventListener("click", convert);
 $("#copy-traditional").addEventListener("click", () => conversion && copy(conversion.convertedText, conversion.expression === "colloquial" ? "香港口语" : "繁体文字"));
 $("#copy-jyutping").addEventListener("click", () => conversion && copy(conversion.segments.flatMap((segment) => segment.tokens.flatMap((token) => token.jyutping)).join(" "), "粤拼"));
 $("#news-speak").addEventListener("click", speakNews);
+document.querySelectorAll("[data-speech-voice]").forEach((select) => select.addEventListener("change", (event) => {
+  selectedVoiceKey = event.target.value;
+  cantoneseVoice = cantoneseVoices.find((voice) => voiceKey(voice) === selectedVoiceKey) ?? cantoneseVoices[0] ?? null;
+  selectedVoiceKey = voiceKey(cantoneseVoice);
+  stopSpeaking();
+  updateVoiceControls();
+  refreshVoice();
+}));
+document.querySelectorAll("[data-speech-rate]").forEach((select) => select.addEventListener("change", (event) => {
+  speechRate = Number(event.target.value) || 0.92;
+  document.querySelectorAll("[data-speech-rate]").forEach((other) => { other.value = String(speechRate); });
+  stopSpeaking();
+}));
 $("#news-history-toggle").addEventListener("click", () => {
   const history = $("#news-history");
   history.hidden = !history.hidden;
@@ -345,4 +441,4 @@ $("#news-history-toggle").addEventListener("click", () => {
 refreshVoice();
 loadNews();
 window.speechSynthesis?.addEventListener("voiceschanged", refreshVoice);
-window.addEventListener("pagehide", () => window.speechSynthesis?.cancel());
+window.addEventListener("pagehide", stopSpeaking);

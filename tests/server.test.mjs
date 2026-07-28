@@ -22,6 +22,13 @@ test("serves the learning page with security headers", () => withServer(async (o
   assert.match(html, /香港口语/);
 }));
 
+test("serves the browser speech helper module", () => withServer(async (origin) => {
+  const response = await fetch(`${origin}/speech-core.mjs`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/javascript/);
+  assert.match(await response.text(), /createSpeechPlan/);
+}));
+
 test("exposes a health check for the hosting platform", () => withServer(async (origin) => {
   const response = await fetch(`${origin}/health`);
   assert.equal(response.status, 200);
