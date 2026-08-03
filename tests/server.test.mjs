@@ -29,6 +29,14 @@ test("serves the browser speech helper module", () => withServer(async (origin) 
   assert.match(await response.text(), /createSpeechPlan/);
 }));
 
+test("serves learning modules without exposing arbitrary files", () => withServer(async (origin) => {
+  for (const file of ["learning-core.mjs", "campus-phrases.mjs"]) {
+    const response = await fetch(`${origin}/${file}`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type"), /text\/javascript/);
+  }
+}));
+
 test("exposes a health check for the hosting platform", () => withServer(async (origin) => {
   const response = await fetch(`${origin}/health`);
   assert.equal(response.status, 200);

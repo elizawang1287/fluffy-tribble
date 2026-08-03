@@ -70,13 +70,13 @@ export const colloquialRules = [
   rule("location_playground", "在操場", "喺操場", "常用地点表达"),
   rule("location_home", "在家", "喺屋企", "常用地点表达"),
 
-  rule("verb_speak_words", "説話", "講嘢", "常用动词"),
+  rule("verb_speak_words", "說話", "講嘢", "常用动词"),
   rule("verb_know", "知道", "知", "常用动词"),
   rule("verb_like", "喜歡", "鍾意", "常用动词"),
   rule("verb_see", "看見", "見到", "常用动词"),
   rule("verb_eat_meal", "吃飯", "食飯", "常用动词"),
   rule("verb_go_home", "回家", "返屋企", "常用动词"),
-  rule("verb_say", "説", "講", "常用动词"),
+  rule("verb_say", "說", "講", "常用动词"),
   rule("verb_look", "看", "睇", "常用动词"),
   rule("verb_eat", "吃", "食", "常用动词"),
 

@@ -25,6 +25,33 @@
         <div class="hero-sticker" aria-hidden="true"><strong>早晨！</strong><span>zou2 san4</span></div>
       </section>
 
+      <nav class="learning-paths" aria-label="学习入口">
+        <a href="#converter-title"><strong>我想看懂</strong><span>转换通知和课文</span></a>
+        <a href="#campus-heading"><strong>我想开口</strong><span>学习校园情境短句</span></a>
+        <a href="#daily-plan-heading"><strong>我想练习</strong><span>完成今天的学习任务</span></a>
+      </nav>
+
+      <section class="daily-plan" id="daily-plan" aria-labelledby="daily-plan-heading">
+        <div class="section-heading-row">
+          <div><p class="eyebrow">每天五分钟</p><h2 id="daily-plan-heading">今日校园任务</h2></div>
+          <div class="streak-badge"><strong id="learning-streak">0</strong><span>连续学习天数</span></div>
+        </div>
+        <div class="daily-plan-grid">
+          <div class="daily-checklist" id="daily-checklist">
+            <button type="button" data-daily-link="news"><span aria-hidden="true">○</span><strong>读一篇香港短新闻</strong><small>了解学校以外的香港</small></button>
+            <button type="button" data-daily-link="phrase"><span aria-hidden="true">○</span><strong>学一句校园粤语</strong><small>今天就能在学校用</small></button>
+            <button type="button" data-daily-link="words"><span aria-hidden="true">○</span><strong>复习一个生词</strong><small>把不熟的词变成熟词</small></button>
+          </div>
+          <article class="daily-phrase-card">
+            <span class="daily-label">今日一句</span>
+            <p id="daily-phrase-simplified"></p>
+            <strong id="daily-phrase-spoken"></strong>
+            <div><button type="button" id="daily-phrase-speak" data-speech-action data-requires-voice data-idle-label="听校园粤语" disabled><span aria-hidden="true">▶</span> 听校园粤语</button><button type="button" id="daily-phrase-jyutping-button">看粤拼</button></div>
+            <p class="daily-phrase-jyutping" id="daily-phrase-jyutping" hidden></p>
+          </article>
+        </div>
+      </section>
+
       <section class="daily-news" aria-labelledby="daily-news-heading">
         <div class="news-heading">
           <div>
@@ -44,7 +71,7 @@
             </div>
             <div class="news-actions">
               <div class="speech-controls">
-                <button class="news-speak-button" id="news-speak" type="button" disabled><span aria-hidden="true">▶</span> 粤语朗读</button>
+                <button class="news-speak-button" id="news-speak" type="button" data-speech-action data-idle-label="粤语朗读" disabled><span aria-hidden="true">▶</span> 粤语朗读</button>
                 <label for="news-speech-voice">声音
                   <select id="news-speech-voice" data-speech-voice disabled><option value="">自动选择</option></select>
                 </label>
@@ -55,6 +82,7 @@
                     <option value="1">正常 1×</option>
                   </select>
                 </label>
+                <button class="mark-read-button" id="mark-news-read" type="button" disabled>标记已读</button>
               </div>
               <span>新闻内容保持书面语，避免改变事实。</span>
             </div>
@@ -69,6 +97,16 @@
           <div id="news-history-list"></div>
         </div>
         <p class="news-error" id="news-error" role="status"></p>
+      </section>
+
+      <section class="campus-library" id="campus-library" aria-labelledby="campus-heading">
+        <div class="section-heading-row">
+          <div><p class="eyebrow">刚到香港也能开口</p><h2 id="campus-heading">校园情境短句</h2></div>
+          <span class="section-note">书面语与香港口语对照</span>
+        </div>
+        <div class="campus-filters" id="campus-filters" aria-label="校园场景"></div>
+        <div class="campus-phrase-list" id="campus-phrase-list"></div>
+        <p class="campus-status" id="campus-status" role="status"></p>
       </section>
 
       <section class="workspace" aria-labelledby="converter-title">
@@ -93,7 +131,7 @@
           </div>
           <div id="message-region" aria-live="polite"></div>
         </div>
-        <aside class="privacy-note"><span aria-hidden="true">✓</span><p><strong>放心使用</strong> 输入内容只在你的设备和本地服务中处理，不会保存。</p></aside>
+        <aside class="privacy-note"><span aria-hidden="true">✓</span><p><strong>放心使用</strong> 输入内容只在本地服务中处理；学习记录仅保存在当前浏览器，可随时清空。</p></aside>
       </section>
 
       <section class="results" id="results" aria-labelledby="result-title" hidden>
@@ -110,6 +148,13 @@
                 <option value="1">正常 1×</option>
               </select>
             </label>
+            <label for="speech-repeat">循环
+              <select id="speech-repeat">
+                <option value="1" selected>1 次</option>
+                <option value="3">3 次</option>
+              </select>
+            </label>
+            <button type="button" id="toggle-jyutping" aria-pressed="false">隐藏粤拼</button>
             <button type="button" id="copy-traditional">复制繁体</button>
             <button type="button" id="copy-jyutping">复制粤拼</button>
           </div>
@@ -120,7 +165,25 @@
         <div class="tone-legend" aria-label="粤拼声调颜色说明"><strong>声调颜色</strong><span class="tone-dot tone-bg-1">1</span><span class="tone-dot tone-bg-2">2</span><span class="tone-dot tone-bg-3">3</span><span class="tone-dot tone-bg-4">4</span><span class="tone-dot tone-bg-5">5</span><span class="tone-dot tone-bg-6">6</span><small>颜色只是帮助辨认，数字才是声调。</small></div>
       </section>
 
+      <section class="learning-shelf" id="wordbook" aria-labelledby="wordbook-heading">
+        <div class="section-heading-row">
+          <div><p class="eyebrow">只保存在这台设备</p><h2 id="wordbook-heading">我的校园生词本</h2></div>
+          <div class="shelf-actions"><span id="wordbook-count">0 个词</span><button type="button" id="clear-wordbook">清空</button></div>
+        </div>
+        <p class="shelf-help">点击繁体与粤拼旁边的 ☆ 即可收藏；把词标记为“会了”也会完成今天的复习任务。</p>
+        <div class="wordbook-list" id="wordbook-list"></div>
+      </section>
+
+      <section class="learning-shelf" id="history" aria-labelledby="history-heading">
+        <div class="section-heading-row">
+          <div><p class="eyebrow">最近学习</p><h2 id="history-heading">转换记录</h2></div>
+          <div class="shelf-actions"><span>最多保留 20 条</span><button type="button" id="clear-history">清空</button></div>
+        </div>
+        <div class="history-list" id="conversion-history-list"></div>
+      </section>
+
       <footer><strong>粤读校园</strong><span>学习工具可能偶有标音误差，重要内容请向老师确认。</span></footer>
+      <div class="learning-toast" id="learning-toast" role="status" aria-live="polite" hidden></div>
     </main>
   </body>
 </html>

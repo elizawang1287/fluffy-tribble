@@ -17,7 +17,7 @@ test("splits long text without losing characters", () => {
 test("converts simplified Chinese and generates Jyutping", () => {
   const result = convertWrittenText("老师说我们明天上课。银行在学校旁边。");
   assert.equal(result.segments.length, 2);
-  assert.match(result.convertedText, /^老師説我們明天上課。/);
+  assert.match(result.convertedText, /^老師說我們明天上課。/);
   assert.ok(result.segments[0].tokens.flatMap((token) => token.jyutping).includes("lou5"));
   assert.ok(result.segments[1].tokens.flatMap((token) => token.jyutping).includes("hong4"));
 });
@@ -25,7 +25,7 @@ test("converts simplified Chinese and generates Jyutping", () => {
 test("uses conservative school-term grouping for ambiguous sentences", () => {
   const result = convertWrittenText("老师说明天上课。");
   const tokens = result.segments[0].tokens;
-  assert.deepEqual(tokens.map((token) => token.text), ["老師", "説", "明天", "上課", "\u3002"]);
+  assert.deepEqual(tokens.map((token) => token.text), ["老師", "說", "明天", "上課", "\u3002"]);
   assert.deepEqual(tokens.flatMap((token) => token.jyutping), ["lou5", "si1", "syut3", "ming4", "tin1", "soeng5", "fo3"]);
 });
 
@@ -43,10 +43,10 @@ test("keeps token offsets intact with non-BMP characters", () => {
 test("converts common school expressions into conservative Hong Kong colloquial Chinese", () => {
   const result = convertColloquialText("老师说明天八点半在图书馆集合。你有没有带作业？");
   assert.equal(result.expression, "colloquial");
-  assert.equal(result.writtenText, "老師説明天八點半在圖書館集合。\n你有沒有帶作業？");
+  assert.equal(result.writtenText, "老師說明天八點半在圖書館集合。\n你有沒有帶作業？");
   assert.equal(result.convertedText, "老師講聽日八點半喺圖書館集合。\n你有冇帶功課？");
   assert.deepEqual(result.segments[0].changes.map(({ from, to }) => [from, to]), [
-    ["説", "講"],
+    ["說", "講"],
     ["明天", "聽日"],
     ["在圖書館", "喺圖書館"],
   ]);

@@ -18,6 +18,8 @@ const staticFiles = new Map([
   ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
   ["/speech-core.mjs", ["speech-core.mjs", "text/javascript; charset=utf-8"]],
+  ["/learning-core.mjs", ["learning-core.mjs", "text/javascript; charset=utf-8"]],
+  ["/campus-phrases.mjs", ["campus-phrases.mjs", "text/javascript; charset=utf-8"]],
 ]);
 
 function sendJson(response, status, body, cacheControl = "no-store") {

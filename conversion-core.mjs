@@ -34,6 +34,12 @@ const highConfidenceTerms = [
 const toHongKongTraditional = OpenCC.Converter({ from: "cn", to: "hk" });
 const jyutpingConverter = ToJyutping.customize(pronunciationOverrides);
 
+function convertToHongKongTraditional(text) {
+  // OpenCC's bundled HK table can emit the Japanese-style glyph "説".
+  // Hong Kong school materials use the traditional form "說".
+  return toHongKongTraditional(text).replaceAll("説", "說");
+}
+
 export function normalizeInput(input) {
   return input.normalize("NFC").replace(/\r\n?/g, "\n").replace(/[\t\f\v]+/g, " ").replace(/ {2,}/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
@@ -116,7 +122,7 @@ export function convertWrittenText(input) {
   const normalized = normalizeInput(input);
   const warnings = new Set();
   const segments = splitIntoSegments(normalized).map((source, index) => {
-    const text = toHongKongTraditional(source);
+    const text = convertToHongKongTraditional(source);
     const tokens = createTokens(text);
     if (tokens.some((token) => token.status === "unknown")) warnings.add("少数字词暂时无法标注粤拼，请结合朗读确认。");
     return { id: `seg_${index + 1}`, source, text, tokens };
@@ -136,7 +142,7 @@ export function convertColloquialText(input) {
   const warnings = new Set(["香港口语会因语境和说话习惯而不同，以下是规则生成的参考说法。"]);
   let changeCount = 0;
   const segments = splitIntoSegments(normalized).map((source, index) => {
-    const writtenText = toHongKongTraditional(source);
+    const writtenText = convertToHongKongTraditional(source);
     const converted = applyColloquialRules(writtenText);
     changeCount += converted.changes.length;
     const tokens = createTokens(converted.text);
