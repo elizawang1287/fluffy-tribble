@@ -29,6 +29,7 @@
         <a href="#converter-title"><strong>我想看懂</strong><span>转换通知和课文</span></a>
         <a href="#campus-heading"><strong>我想开口</strong><span>学习校园情境短句</span></a>
         <a href="#daily-plan-heading"><strong>我想练习</strong><span>完成今天的学习任务</span></a>
+        <a href="#daily-news-heading"><strong>我想看新闻</strong><span>逐句听读今日短新闻</span></a>
       </nav>
 
       <section class="daily-plan" id="daily-plan" aria-labelledby="daily-plan-heading">
@@ -88,8 +89,20 @@
             </div>
           </article>
           <div class="news-learning" id="news-learning">
-            <p class="news-learning-label">繁体与粤拼</p>
+            <div class="news-reader-heading">
+              <p class="news-learning-label">新闻精读</p>
+              <button id="news-full-toggle" type="button" aria-expanded="false" aria-controls="news-token-list" disabled>查看全文</button>
+            </div>
+            <div class="news-reader-status">
+              <span id="news-sentence-progress">正在准备逐句内容…</span>
+              <label><input id="news-continuous-play" type="checkbox"> 连续播放</label>
+            </div>
             <div id="news-token-list"><p class="news-loading">正在生成粤拼…</p></div>
+            <div class="news-reader-controls" id="news-reader-controls" hidden>
+              <button id="news-previous-sentence" type="button">← 上一句</button>
+              <button id="news-replay-sentence" type="button" data-speech-action data-requires-voice data-idle-label="重听本句" disabled><span aria-hidden="true">▶</span> 重听本句</button>
+              <button id="news-next-sentence" type="button">下一句 →</button>
+            </div>
           </div>
         </div>
         <div class="news-history" id="news-history" hidden>

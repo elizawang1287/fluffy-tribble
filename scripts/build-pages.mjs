@@ -9,6 +9,7 @@ const staticFiles = [
   "styles.css",
   "app.js",
   "speech-core.mjs",
+  "news-reading-core.mjs",
   "learning-core.mjs",
   "campus-phrases.mjs",
 ];

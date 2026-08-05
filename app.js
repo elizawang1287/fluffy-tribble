@@ -1,4 +1,5 @@
 import { createSpeechPlan, rankCantoneseVoices } from "./speech-core.mjs";
+import { clampNewsSentenceIndex, createNewsSentenceEntries, moveNewsSentence } from "./news-reading-core.mjs";
 import { campusCategories, campusPhrases, phraseForDate } from "./campus-phrases.mjs";
 import {
   addHistoryItem,
@@ -37,6 +38,11 @@ let expression = "written";
 let newsItems = [];
 let activeNews = null;
 const newsConversions = new Map();
+let newsSentences = [];
+let activeNewsSentenceIndex = 0;
+let newsContinuousPlay = false;
+let newsFullTextVisible = false;
+let newsReaderCompleted = false;
 const phraseConversions = new Map();
 let campusCategory = "classroom";
 let toastTimer = null;
@@ -166,6 +172,8 @@ function refreshVoice() {
   document.querySelectorAll("[data-requires-voice]").forEach((button) => { button.disabled = !cantoneseVoice; });
   const newsSpeak = $("#news-speak");
   if (newsSpeak) newsSpeak.disabled = !cantoneseVoice || !activeNews;
+  const newsReplay = $("#news-replay-sentence");
+  if (newsReplay) newsReplay.disabled = !cantoneseVoice || newsSentences.length === 0;
 }
 
 function setSpeechUnavailable() {
@@ -183,7 +191,7 @@ function toneClass(syllable) {
   return tone ? `tone-${tone}` : "";
 }
 
-function playSpeechPlan({ id, plan, button, highlight, onError }) {
+function playSpeechPlan({ id, plan, button, highlight, onError, onComplete }) {
   if (!cantoneseVoice || plan.length === 0) return;
   if (speakingId === id) return stopSpeaking();
   stopSpeaking();
@@ -195,6 +203,7 @@ function playSpeechPlan({ id, plan, button, highlight, onError }) {
     if (runId !== speechRunId || speakingId !== id) return;
     if (index >= plan.length) {
       stopSpeaking();
+      onComplete?.();
       return;
     }
     const part = plan[index];
@@ -343,20 +352,125 @@ async function convertNews(item) {
 }
 
 function renderNewsTokens(data) {
+  newsSentences = createNewsSentenceEntries(data);
+  activeNewsSentenceIndex = clampNewsSentenceIndex(activeNewsSentenceIndex, newsSentences.length);
+  renderNewsReader();
+}
+
+function renderNewsSentenceCard(sentence, withPlayButton = false) {
+  const card = document.createElement("section");
+  card.className = "news-sentence";
+  card.dataset.newsSentence = String(sentence.index);
+  const heading = document.createElement("div");
+  heading.className = "news-sentence-heading";
+  const label = document.createElement("span");
+  label.className = "news-sentence-label";
+  label.textContent = sentence.label;
+  heading.append(label);
+  if (withPlayButton) {
+    const play = document.createElement("button");
+    play.type = "button";
+    play.className = "news-sentence-speak";
+    play.dataset.speechAction = "true";
+    play.dataset.requiresVoice = "true";
+    play.dataset.idleLabel = sentence.idleLabel;
+    play.disabled = !cantoneseVoice;
+    setSpeakButtonState(play, false);
+    play.setAttribute("aria-label", `${sentence.idleLabel}：${sentence.text}`);
+    play.addEventListener("click", () => speakNewsSentence(sentence, play, card));
+    heading.append(play);
+  }
+  const line = document.createElement("div");
+  line.className = "news-token-line";
+  line.lang = "zh-HK";
+  sentence.tokens.forEach((token) => line.append(renderToken(token, { source: sentence.text, sourceType: "news" })));
+  card.append(heading, line);
+  return card;
+}
+
+function renderNewsReader() {
   const tokenList = $("#news-token-list");
+  const controls = $("#news-reader-controls");
+  const fullToggle = $("#news-full-toggle");
   tokenList.replaceChildren();
-  data.segments.forEach((segment) => {
-    const line = document.createElement("div");
-    line.className = "news-token-line";
-    line.lang = "zh-HK";
-    segment.tokens.forEach((token) => line.append(renderToken(token, { source: segment.text, sourceType: "news" })));
-    tokenList.append(line);
+  tokenList.classList.toggle("show-all", newsFullTextVisible);
+  fullToggle.disabled = newsSentences.length === 0;
+  fullToggle.textContent = newsFullTextVisible ? "返回逐句" : "查看全文";
+  fullToggle.setAttribute("aria-expanded", String(newsFullTextVisible));
+  if (newsSentences.length === 0) {
+    tokenList.innerHTML = '<p class="news-loading">这篇新闻暂时没有可点读的句子。</p>';
+    controls.hidden = true;
+    return;
+  }
+  if (newsFullTextVisible) {
+    newsSentences.forEach((sentence) => tokenList.append(renderNewsSentenceCard(sentence, true)));
+    $("#news-sentence-progress").textContent = `全文 · 共 ${newsSentences.length} 段`;
+    controls.hidden = true;
+  } else {
+    const sentence = newsSentences[activeNewsSentenceIndex];
+    tokenList.append(renderNewsSentenceCard(sentence));
+    $("#news-sentence-progress").textContent = newsReaderCompleted
+      ? "完成今日新闻 ✓"
+      : `${sentence.label} · ${activeNewsSentenceIndex + 1} / ${newsSentences.length}`;
+    controls.hidden = false;
+    $("#news-previous-sentence").disabled = activeNewsSentenceIndex === 0;
+    $("#news-next-sentence").disabled = activeNewsSentenceIndex === newsSentences.length - 1;
+    $("#news-replay-sentence").disabled = !cantoneseVoice;
+  }
+  updateWordSaveButtons();
+}
+
+function setNewsSentenceIndex(index) {
+  if (speakingId?.startsWith("news-")) stopSpeaking();
+  activeNewsSentenceIndex = clampNewsSentenceIndex(index, newsSentences.length);
+  newsReaderCompleted = false;
+  renderNewsReader();
+}
+
+function playActiveNewsSentence() {
+  const sentence = newsSentences[activeNewsSentenceIndex];
+  if (!sentence) return;
+  speakNewsSentence(sentence, $("#news-replay-sentence"), document.querySelector(`[data-news-sentence="${sentence.index}"]`));
+}
+
+function speakNewsSentence(sentence, button, highlight) {
+  if (!activeNews || !cantoneseVoice) return;
+  playSpeechPlan({
+    id: `news-${activeNews.date}-sentence-${sentence.index}`,
+    plan: createSpeechPlan(sentence.text, { section: sentence.section }),
+    button,
+    highlight: () => highlight,
+    onError: () => {
+      $("#news-error").textContent = "这句话没有朗读成功，请检查设备的粤语声音设置。";
+    },
+    onComplete: () => {
+      if (sentence.index >= newsSentences.length - 1) {
+        newsReaderCompleted = true;
+        completeDailyTask("news", "完成了今天的新闻阅读任务");
+        renderNewsReader();
+      } else if (newsContinuousPlay && !newsFullTextVisible) {
+        activeNewsSentenceIndex = moveNewsSentence(sentence.index, 1, newsSentences.length);
+        renderNewsReader();
+        playActiveNewsSentence();
+      }
+    },
   });
 }
 
 function selectNews(item) {
   if (speakingId?.startsWith("news-")) stopSpeaking();
   activeNews = item;
+  newsSentences = [];
+  activeNewsSentenceIndex = 0;
+  newsFullTextVisible = false;
+  newsReaderCompleted = false;
+  $("#news-token-list").innerHTML = '<p class="news-loading">正在生成粤拼…</p>';
+  $("#news-token-list").classList.remove("show-all");
+  $("#news-sentence-progress").textContent = "正在准备逐句内容…";
+  $("#news-reader-controls").hidden = true;
+  $("#news-full-toggle").disabled = true;
+  $("#news-full-toggle").textContent = "查看全文";
+  $("#news-full-toggle").setAttribute("aria-expanded", "false");
   $("#news-category").textContent = item.category;
   $("#news-date").dateTime = item.date;
   $("#news-date").textContent = formatNewsDate(item.date);
@@ -796,6 +910,21 @@ $("#copy-traditional").addEventListener("click", () => conversion && copy(conver
 $("#copy-jyutping").addEventListener("click", () => conversion && copy(conversion.segments.flatMap((segment) => segment.tokens.flatMap((token) => token.jyutping)).join(" "), "粤拼"));
 $("#news-speak").addEventListener("click", speakNews);
 $("#mark-news-read").addEventListener("click", () => completeDailyTask("news", "完成了今天的新闻阅读任务"));
+$("#news-previous-sentence").addEventListener("click", () => {
+  setNewsSentenceIndex(moveNewsSentence(activeNewsSentenceIndex, -1, newsSentences.length));
+});
+$("#news-next-sentence").addEventListener("click", () => {
+  setNewsSentenceIndex(moveNewsSentence(activeNewsSentenceIndex, 1, newsSentences.length));
+});
+$("#news-replay-sentence").addEventListener("click", playActiveNewsSentence);
+$("#news-continuous-play").addEventListener("change", (event) => {
+  newsContinuousPlay = event.target.checked;
+});
+$("#news-full-toggle").addEventListener("click", () => {
+  if (speakingId?.startsWith("news-")) stopSpeaking();
+  newsFullTextVisible = !newsFullTextVisible;
+  renderNewsReader();
+});
 $("#speech-repeat").addEventListener("change", (event) => {
   speechRepeat = Number(event.target.value) === 3 ? 3 : 1;
   stopSpeaking();
