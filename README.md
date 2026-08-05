@@ -1,37 +1,40 @@
 # 粤读校园
 
-面向小学高年级和初中学生的香港繁体、粤拼与粤语朗读 MVP。
+面向小学高年级和初中学生的香港繁体、粤拼与校园粤语学习网站。
 
-## 功能
+## 当前功能
 
-- 简体中文转换为香港繁体
-- 根据标点自动分句，超长句按软标点切分
-- 按词显示粤拼，六个声调使用不同颜色辅助辨认
-- 使用设备自带的 `yue-HK` / `zh-HK` 粤语声音逐句朗读，优先选择自然声音并按标点安排停顿
-- 可选择设备上的粤语声音和语速；新闻标题、问句与正文使用更自然的节奏
-- 复制繁体和粤拼
-- API 支持 `written` 与 `colloquial` 两种表达模式；口语模式使用免费的保守规则转换，并保留书面语对照
-- 每天自动显示一篇适合学生的香港短新闻，并提供繁体、粤拼及粤语朗读
-- 可查看最近 30 天的历史新闻
-- 29 句校园情境口语，涵盖课堂、功课、小息、同学交流和校务活动
-- 支持隐藏粤拼、自测后逐词揭晓，以及单句 1 次或 3 次循环朗读
-- 浏览器本地生词本、最近 20 条转换记录和每日三项学习任务
-- 学习记录只保存在当前浏览器，可在页面中随时清空；服务端不保存输入
+- 简体中文转换为香港繁体并生成粤拼
+- 书面语与保守的香港校园口语转换
+- 按句拆分长文本并提供浏览器粤语朗读
+- 校园情景短句、生词本、学习记录和每日任务
+- 每日学生短新闻及最近 30 天归档
+- 学习数据仅保存在当前浏览器，不上传用户输入
 
-## 运行
+## 技术架构
 
-需要 Node.js 20 或更高版本，不需要安装第三方依赖：
+- Cloudflare Pages 托管 HTML、CSS、JavaScript 和新闻 JSON
+- Pages Functions 提供 `/api/v1/convert`、`/api/v1/news` 和 `/health`
+- GitHub Actions 每天更新 `data/news/` 并触发 Pages 自动部署
+- 运行时不需要数据库或第三方 npm 依赖
+
+Google TTS、Azure 跟读评分和持久化免费额度计数尚未接入，将在迁移版体验确认后实施。
+
+## 本地开发
+
+需要 Node.js 22 或更高版本。
 
 ```powershell
+npm install
 npm run dev
 ```
 
-打开 <http://127.0.0.1:3000>。
+本地体验地址固定为 <http://127.0.0.1:3001>。
 
-如果当前 Windows 沙箱限制父目录读取，可以直接使用：
+`npm run dev` 使用轻量预览适配器运行同一份 `dist` 和 Functions。需要完全模拟 Cloudflare Workers 运行时时，可使用：
 
 ```powershell
-node --preserve-symlinks --preserve-symlinks-main server.mjs
+npm run dev:cloudflare
 ```
 
 ## 测试
@@ -40,9 +43,28 @@ node --preserve-symlinks --preserve-symlinks-main server.mjs
 npm test
 ```
 
+测试会先生成 `dist/`，再检查转换、新闻、Cloudflare Functions、安全响应和纯静态发布目录。
+
+## Cloudflare Pages 部署
+
+在 Cloudflare Pages 中连接 GitHub 仓库，并使用以下设置：
+
+- Build command：`npm run build`
+- Build output directory：`dist`
+- Root directory：项目根目录
+- Node.js：22 或更高版本
+
+也可以在已经登录 Wrangler 的电脑上运行：
+
+```powershell
+npm run deploy
+```
+
+静态资源请求不会调用 Functions。转换和新闻接口会计入 Workers 免费请求额度。
+
 ## API
 
-`POST /api/v1/convert`
+### `POST /api/v1/convert`
 
 ```json
 {
@@ -51,34 +73,28 @@ npm test
 }
 ```
 
-每次最多 2,000 个 Unicode 字符。响应包含香港繁体、分句结果以及按词组织的粤拼 token。
+`expression` 支持 `written` 和 `colloquial`。每次最多 2,000 个 Unicode 字符。
 
-## 免费部署到 Render
+### `GET /api/v1/news`
 
-项目根目录的 `render.yaml` 已包含免费 Web Service 配置。将仓库推送到 GitHub 后，在 Render 选择 **New → Blueprint**，连接仓库并确认创建即可。平台会执行测试、启动服务并使用 `/health` 检查运行状态。
+返回最近 30 天经过规范化的新闻归档。
 
-线上服务会监听平台提供的 `PORT` 和公网容器地址；本地仍然通过 <http://127.0.0.1:3000> 访问。转换接口按来源地址限制为每分钟 30 次请求。
+### `GET /health`
 
-## 每日短新闻
+返回 Cloudflare Pages Functions 的健康状态。
 
-- 数据来自香港电台公开 RSS，只保存标题、短摘要、日期、分类和原文链接。
-- GitHub Actions 每天香港时间约 07:10 自动挑选教育、科学、文化、体育或生活类新闻。
-- 暴力、伤亡、毒品、博彩等不适合学生的主题会被规则过滤。
-- `data/news/index.json` 最多保存最近 30 篇，较旧的每日文件会自动删除。
-- 网站通过 `GET /api/v1/news` 读取归档；远程更新失败时会使用随部署保存的版本或友好提示。
-- 新闻保持书面语，只生成繁体、粤拼及设备端粤语朗读，避免口语规则改变新闻事实。
+## 安全与隐私
 
-也可以在 GitHub 的 **Actions → Update daily student news → Run workflow** 手动更新一次。
-
-## 发音说明
-
-浏览器只会选择语言标识为 `yue-HK`、`zh-HK` 或名称明确包含粤语/香港的声音；没有找到时不会降级成普通话。请在系统语言或辅助功能设置中安装“粤语（香港）”。
+- 发布目录采用文件白名单，源代码、测试、配置和 Git 元数据不会作为静态资源发布
+- 响应包含 CSP、`nosniff`、Referrer Policy 和麦克风权限策略
+- API 凭证以后只能放入 Cloudflare Secrets，不能提交到 GitHub
+- 未来的学生录音只用于单次评分，完成后立即删除
 
 ## 第三方组件
 
-转换词典随项目一同放在 `vendor/`，运行时不依赖 CDN：
+转换词典随项目保存在 `vendor/`，运行时不依赖 CDN：
 
 - opencc-js 1.4.1
 - to-jyutping 3.1.1
 
-对应许可证保存在同一目录。
+许可证文件位于同一目录。

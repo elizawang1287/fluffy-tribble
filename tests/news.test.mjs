@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mergeArchive, parseRss, selectDailyNews, shortenSummary } from "../news-core.mjs";
-import { createNewsService, normalizeArchive } from "../news-service.mjs";
+import { normalizeArchive } from "../news-api-core.mjs";
 
 const rss = `<?xml version="1.0" encoding="utf-8"?>
 <rss><channel>
@@ -55,24 +55,6 @@ test("archive is deduplicated, sorted and limited to 30 days", () => {
   assert.equal(items.length, 30);
   assert.equal(items[0].date, "2026-07-24");
   assert.equal(new Set(items.map((item) => item.date)).size, 30);
-});
-
-test("news service caches a normalized remote archive", async () => {
-  let requests = 0;
-  const service = createNewsService({
-    fetchImpl: async () => {
-      requests += 1;
-      return new Response(JSON.stringify({
-        items: [{ date: "2026-07-24", title: "<b>校園新聞</b>", summary: "學生參觀科學館。", source: "香港電台", sourceUrl: "https://news.rthk.hk/story" }],
-      }), { status: 200, headers: { "content-type": "application/json" } });
-    },
-  });
-  const first = await service.getArchive(1_000);
-  const second = await service.getArchive(2_000);
-  assert.equal(first.status, "remote");
-  assert.equal(first.items[0].title, "校園新聞");
-  assert.equal(second.items[0].title, "校園新聞");
-  assert.equal(requests, 1);
 });
 
 test("normalization strips unsafe archive links", () => {

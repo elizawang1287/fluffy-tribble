@@ -4,11 +4,16 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
-    "dev": "node --preserve-symlinks --preserve-symlinks-main server.mjs",
-    "start": "node --preserve-symlinks --preserve-symlinks-main server.mjs",
-    "test": "node --preserve-symlinks --preserve-symlinks-main --test tests/*.test.mjs"
+    "build": "node --preserve-symlinks --preserve-symlinks-main scripts/build-pages.mjs",
+    "dev": "npm run build && node --preserve-symlinks --preserve-symlinks-main scripts/preview-pages.mjs",
+    "dev:cloudflare": "npm run build && node --preserve-symlinks --preserve-symlinks-main node_modules/wrangler/bin/wrangler.js pages dev dist --port 3001",
+    "deploy": "npm run build && node --preserve-symlinks --preserve-symlinks-main node_modules/wrangler/bin/wrangler.js pages deploy dist",
+    "test": "npm run build && node --preserve-symlinks --preserve-symlinks-main --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.34.0"
   }
 }
