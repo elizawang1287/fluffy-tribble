@@ -11,11 +11,11 @@
   <body>
     <main>
       <header class="site-header">
-        <a class="brand" href="#top" aria-label="粤读校园首页"><span class="brand-mark" aria-hidden="true">粤</span><span>粤读校园</span></a>
+        <a class="brand" href="#home" aria-label="粤读校园首页"><span class="brand-mark" aria-hidden="true">粤</span><span>粤读校园</span></a>
         <span class="header-note">繁体 · 粤拼 · 朗读</span>
       </header>
 
-      <section class="hero" id="top">
+      <section class="hero" id="top" data-app-view="home">
         <div class="hero-copy">
           <p class="eyebrow">给刚到香港读书的你</p>
           <h1>看得懂，<span>读得出。</span></h1>
@@ -25,14 +25,15 @@
         <div class="hero-sticker" aria-hidden="true"><strong>早晨！</strong><span>zou2 san4</span></div>
       </section>
 
-      <nav class="learning-paths" aria-label="学习入口">
-        <a href="#converter-title"><strong>我想看懂</strong><span>转换通知和课文</span></a>
-        <a href="#campus-heading"><strong>我想开口</strong><span>学习校园情境短句</span></a>
-        <a href="#daily-plan-heading"><strong>我想练习</strong><span>完成今天的学习任务</span></a>
-        <a href="#daily-news-heading"><strong>我想看新闻</strong><span>逐句听读今日短新闻</span></a>
+      <nav class="learning-paths" aria-label="学习入口" data-app-view="home">
+        <a href="#understand"><span class="path-icon" aria-hidden="true">文</span><strong>我想看懂</strong><span>转换通知和课文</span><b>进入模块 →</b></a>
+        <a href="#speak"><span class="path-icon" aria-hidden="true">讲</span><strong>我想开口</strong><span>一句一页学校园粤语</span><b>进入模块 →</b></a>
+        <a href="#practice"><span class="path-icon" aria-hidden="true">练</span><strong>我想练习</strong><span>每天五分钟校园任务</span><b>进入模块 →</b></a>
+        <a href="#news"><span class="path-icon" aria-hidden="true">闻</span><strong>我想看新闻</strong><span>逐句听读今日短新闻</span><b>进入模块 →</b></a>
       </nav>
 
-      <section class="daily-plan" id="daily-plan" aria-labelledby="daily-plan-heading">
+      <section class="daily-plan" id="daily-plan" aria-labelledby="daily-plan-heading" data-app-view="practice" hidden>
+        <div class="module-toolbar"><a href="#home">← 返回首页</a><span>我想练习</span></div>
         <div class="section-heading-row">
           <div><p class="eyebrow">每天五分钟</p><h2 id="daily-plan-heading">今日校园任务</h2></div>
           <div class="streak-badge"><strong id="learning-streak">0</strong><span>连续学习天数</span></div>
@@ -53,7 +54,8 @@
         </div>
       </section>
 
-      <section class="daily-news" aria-labelledby="daily-news-heading">
+      <section class="daily-news" aria-labelledby="daily-news-heading" data-app-view="news" hidden>
+        <div class="module-toolbar"><a href="#home">← 返回首页</a><span>我想看新闻</span></div>
         <div class="news-heading">
           <div>
             <p class="eyebrow">每天认识一点香港</p>
@@ -112,21 +114,28 @@
         <p class="news-error" id="news-error" role="status"></p>
       </section>
 
-      <section class="campus-library" id="campus-library" aria-labelledby="campus-heading">
+      <section class="campus-library" id="campus-library" aria-labelledby="campus-heading" data-app-view="speak" hidden>
+        <div class="module-toolbar"><a href="#home">← 返回首页</a><span>我想开口</span></div>
         <div class="section-heading-row">
           <div><p class="eyebrow">刚到香港也能开口</p><h2 id="campus-heading">校园情境短句</h2></div>
           <span class="section-note">书面语与香港口语对照</span>
         </div>
         <div class="campus-filters" id="campus-filters" aria-label="校园场景"></div>
         <div class="campus-phrase-list" id="campus-phrase-list"></div>
+        <div class="campus-reader-controls" id="campus-reader-controls">
+          <button id="campus-previous" type="button">← 上一句</button>
+          <span id="campus-progress" aria-live="polite">1 / 1</span>
+          <button id="campus-next" type="button">下一句 →</button>
+        </div>
         <p class="campus-status" id="campus-status" role="status"></p>
       </section>
 
-      <section class="workspace" aria-labelledby="converter-title">
+      <section class="workspace" aria-labelledby="converter-title" data-app-view="understand" hidden>
+        <div class="module-toolbar"><a href="#home">← 返回首页</a><span>我想看懂</span></div>
         <div class="panel input-panel">
           <div class="panel-heading">
             <div><span class="step-label">第一步</span><h2 id="converter-title">输入简体文字</h2></div>
-            <button class="text-button" id="example-button" type="button">试试例句</button>
+            <div class="panel-heading-actions"><a class="text-button" href="#history">转换记录</a><button class="text-button" id="example-button" type="button">试试例句</button></div>
           </div>
           <div class="mode-switch" aria-label="表达方式">
             <button type="button" class="active" aria-pressed="true" data-expression="written">书面语</button>
@@ -147,7 +156,7 @@
         <aside class="privacy-note"><span aria-hidden="true">✓</span><p><strong>放心使用</strong> 输入内容只在本地服务中处理；学习记录仅保存在当前浏览器，可随时清空。</p></aside>
       </section>
 
-      <section class="results" id="results" aria-labelledby="result-title" hidden>
+      <section class="results" id="results" aria-labelledby="result-title" data-app-view="understand" hidden>
         <div class="results-heading">
           <div><span class="step-label">第二步</span><h2 id="result-title">跟着粤拼读一读</h2></div>
           <div class="result-actions">
@@ -178,7 +187,8 @@
         <div class="tone-legend" aria-label="粤拼声调颜色说明"><strong>声调颜色</strong><span class="tone-dot tone-bg-1">1</span><span class="tone-dot tone-bg-2">2</span><span class="tone-dot tone-bg-3">3</span><span class="tone-dot tone-bg-4">4</span><span class="tone-dot tone-bg-5">5</span><span class="tone-dot tone-bg-6">6</span><small>颜色只是帮助辨认，数字才是声调。</small></div>
       </section>
 
-      <section class="learning-shelf" id="wordbook" aria-labelledby="wordbook-heading">
+      <section class="learning-shelf" id="wordbook" aria-labelledby="wordbook-heading" data-app-view="wordbook" hidden>
+        <div class="module-toolbar"><a href="#practice">← 返回今日任务</a><span>生词复习</span></div>
         <div class="section-heading-row">
           <div><p class="eyebrow">只保存在这台设备</p><h2 id="wordbook-heading">我的校园生词本</h2></div>
           <div class="shelf-actions"><span id="wordbook-count">0 个词</span><button type="button" id="clear-wordbook">清空</button></div>
@@ -187,7 +197,8 @@
         <div class="wordbook-list" id="wordbook-list"></div>
       </section>
 
-      <section class="learning-shelf" id="history" aria-labelledby="history-heading">
+      <section class="learning-shelf" id="history" aria-labelledby="history-heading" data-app-view="history" hidden>
+        <div class="module-toolbar"><a href="#understand">← 返回文字转换</a><span>最近学习</span></div>
         <div class="section-heading-row">
           <div><p class="eyebrow">最近学习</p><h2 id="history-heading">转换记录</h2></div>
           <div class="shelf-actions"><span>最多保留 20 条</span><button type="button" id="clear-history">清空</button></div>
@@ -195,7 +206,7 @@
         <div class="history-list" id="conversion-history-list"></div>
       </section>
 
-      <footer><strong>粤读校园</strong><span>学习工具可能偶有标音误差，重要内容请向老师确认。</span></footer>
+      <footer data-app-view="home"><strong>粤读校园</strong><span>学习工具可能偶有标音误差，重要内容请向老师确认。</span></footer>
       <div class="learning-toast" id="learning-toast" role="status" aria-live="polite" hidden></div>
     </main>
   </body>

@@ -45,6 +45,7 @@ let newsFullTextVisible = false;
 let newsReaderCompleted = false;
 const phraseConversions = new Map();
 let campusCategory = "classroom";
+let campusPhraseIndex = 0;
 let toastTimer = null;
 
 function loadLearningState() {
@@ -595,6 +596,7 @@ function renderCampusFilters() {
     button.setAttribute("aria-pressed", String(campusCategory === category.id));
     button.addEventListener("click", () => {
       campusCategory = category.id;
+      campusPhraseIndex = 0;
       renderCampusFilters();
       renderCampusPhrases();
     });
@@ -606,7 +608,9 @@ function renderCampusPhrases() {
   const list = $("#campus-phrase-list");
   list.replaceChildren();
   const phrases = campusCategory === "all" ? campusPhrases : campusPhrases.filter((phrase) => phrase.category === campusCategory);
-  phrases.forEach((phrase) => {
+  campusPhraseIndex = Math.min(Math.max(0, campusPhraseIndex), Math.max(0, phrases.length - 1));
+  const phrase = phrases[campusPhraseIndex];
+  if (phrase) {
     const card = document.createElement("article");
     card.className = "campus-phrase-card";
     card.dataset.phraseId = phrase.id;
@@ -642,7 +646,10 @@ function renderCampusPhrases() {
     actions.append(play, reveal);
     card.append(tag, simplified, spoken, written, actions, pronunciation);
     list.append(card);
-  });
+  }
+  $("#campus-progress").textContent = phrases.length ? `${campusPhraseIndex + 1} / ${phrases.length}` : "0 / 0";
+  $("#campus-previous").disabled = campusPhraseIndex === 0;
+  $("#campus-next").disabled = campusPhraseIndex >= phrases.length - 1;
 }
 
 function renderWordbook() {
@@ -739,6 +746,8 @@ function renderHistory() {
       selectExpression(item.expression);
       source.value = item.sourceText;
       updateInputState();
+      location.hash = "understand";
+      renderAppRoute();
       await convert();
     });
     const remove = document.createElement("button");
@@ -901,6 +910,42 @@ async function copy(value, label) {
   catch { showMessage("复制没有成功，请手动选择文字复制。"); }
 }
 
+function currentRoute() {
+  const value = location.hash.replace(/^#/, "").split("/")[0];
+  const aliases = {
+    "": "home",
+    top: "home",
+    "converter-title": "understand",
+    results: "understand",
+    "campus-heading": "speak",
+    "daily-plan-heading": "practice",
+    "daily-news-heading": "news",
+  };
+  const route = aliases[value] ?? value;
+  return new Set(["home", "understand", "speak", "practice", "news", "wordbook", "history"]).has(route) ? route : "home";
+}
+
+function renderAppRoute() {
+  const route = currentRoute();
+  if (speakingId) stopSpeaking();
+  document.body.dataset.route = route;
+  document.querySelectorAll("[data-app-view]").forEach((element) => {
+    const shouldShow = element.dataset.appView === route;
+    element.hidden = element.id === "results" ? !shouldShow || !conversion : !shouldShow;
+  });
+  const labels = {
+    home: "首页",
+    understand: "我想看懂",
+    speak: "我想开口",
+    practice: "我想练习",
+    news: "我想看新闻",
+    wordbook: "生词复习",
+    history: "转换记录",
+  };
+  document.title = `${labels[route]}｜粤读校园`;
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
 source.addEventListener("input", updateInputState);
 modeButtons.forEach((button) => button.addEventListener("click", () => selectExpression(button.dataset.expression)));
 $("#example-button").addEventListener("click", () => { source.value = example; updateInputState(); source.focus(); });
@@ -944,9 +989,17 @@ $("#daily-phrase-jyutping-button").addEventListener("click", () => {
   const phrase = phraseForDate(hongKongDate());
   revealPhraseJyutping(phrase, $("#daily-phrase-jyutping"), $("#daily-phrase-jyutping-button"));
 });
+$("#campus-previous").addEventListener("click", () => {
+  campusPhraseIndex = Math.max(0, campusPhraseIndex - 1);
+  renderCampusPhrases();
+});
+$("#campus-next").addEventListener("click", () => {
+  campusPhraseIndex += 1;
+  renderCampusPhrases();
+});
 document.querySelectorAll("[data-daily-link]").forEach((button) => button.addEventListener("click", () => {
-  const targets = { news: ".daily-news", phrase: ".daily-phrase-card", words: "#wordbook" };
-  document.querySelector(targets[button.dataset.dailyLink])?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const targets = { news: "news", phrase: "speak", words: "wordbook" };
+  location.hash = targets[button.dataset.dailyLink] ?? "practice";
 }));
 $("#clear-wordbook").addEventListener("click", () => {
   if (!learningState.words.length || !window.confirm("确定清空全部生词吗？")) return;
@@ -975,6 +1028,8 @@ $("#news-history-toggle").addEventListener("click", () => {
   $("#news-history-toggle").setAttribute("aria-expanded", String(!history.hidden));
   $("#news-history-toggle").textContent = history.hidden ? "查看往期" : "收起往期";
 });
+window.addEventListener("hashchange", renderAppRoute);
+renderAppRoute();
 renderCampusFilters();
 renderCampusPhrases();
 renderWordbook();
