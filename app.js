@@ -32,6 +32,9 @@ let speechRate = 0.92;
 let speechRunId = 0;
 let speechPauseTimer = null;
 let speakingId = null;
+let cloudAudio = null;
+let cloudAudioUrl = "";
+let speechFetchController = null;
 let speechRepeat = 1;
 let jyutpingHidden = false;
 let expression = "written";
@@ -130,6 +133,16 @@ function stopSpeaking() {
   speechRunId += 1;
   if (speechPauseTimer) clearTimeout(speechPauseTimer);
   speechPauseTimer = null;
+  speechFetchController?.abort();
+  speechFetchController = null;
+  if (cloudAudio) {
+    cloudAudio.pause();
+    cloudAudio.removeAttribute("src");
+    cloudAudio.load();
+  }
+  cloudAudio = null;
+  if (cloudAudioUrl) URL.revokeObjectURL(cloudAudioUrl);
+  cloudAudioUrl = "";
   speakingId = null;
   window.speechSynthesis?.cancel();
   clearSpeechHighlights();
@@ -172,9 +185,9 @@ function refreshVoice() {
   document.querySelectorAll(".speak-button").forEach((button) => { button.disabled = !cantoneseVoice; });
   document.querySelectorAll("[data-requires-voice]").forEach((button) => { button.disabled = !cantoneseVoice; });
   const newsSpeak = $("#news-speak");
-  if (newsSpeak) newsSpeak.disabled = !cantoneseVoice || !activeNews;
+  if (newsSpeak) newsSpeak.disabled = !activeNews;
   const newsReplay = $("#news-replay-sentence");
-  if (newsReplay) newsReplay.disabled = !cantoneseVoice || newsSentences.length === 0;
+  if (newsReplay) newsReplay.disabled = newsSentences.length === 0;
 }
 
 function setSpeechUnavailable() {
@@ -231,6 +244,57 @@ function playSpeechPlan({ id, plan, button, highlight, onError, onComplete }) {
   };
 
   playPart(0);
+}
+
+async function playNewsSpeech({ id, sentenceIndex, button, cloudHighlight, fallbackPlan, fallbackHighlight, onError, onComplete }) {
+  if (!activeNews || fallbackPlan.length === 0) return;
+  if (speakingId === id) return stopSpeaking();
+  stopSpeaking();
+  speakingId = id;
+  const runId = speechRunId;
+  setSpeakButtonState(button, true);
+  clearSpeechHighlights();
+  cloudHighlight?.classList.add("speaking");
+  const controller = new AbortController();
+  speechFetchController = controller;
+  let fallbackStarted = false;
+
+  const useDeviceVoice = () => {
+    if (fallbackStarted || runId !== speechRunId || speakingId !== id) return;
+    fallbackStarted = true;
+    stopSpeaking();
+    if (!cantoneseVoice) return onError?.();
+    playSpeechPlan({ id, plan: fallbackPlan, button, highlight: fallbackHighlight, onError, onComplete });
+  };
+
+  try {
+    const response = await fetch("/api/v1/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        newsDate: activeNews.date,
+        sentenceIndex,
+        speakingRate: speechRate,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error("cloud TTS unavailable");
+    const audioBlob = await response.blob();
+    if (runId !== speechRunId || speakingId !== id) return;
+    speechFetchController = null;
+    cloudAudioUrl = URL.createObjectURL(audioBlob);
+    cloudAudio = new Audio(cloudAudioUrl);
+    cloudAudio.onended = () => {
+      if (runId !== speechRunId || speakingId !== id) return;
+      stopSpeaking();
+      onComplete?.();
+    };
+    cloudAudio.onerror = useDeviceVoice;
+    await cloudAudio.play();
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+    useDeviceVoice();
+  }
 }
 
 function repeatSpeechPlan(plan, count) {
@@ -373,9 +437,8 @@ function renderNewsSentenceCard(sentence, withPlayButton = false) {
     play.type = "button";
     play.className = "news-sentence-speak";
     play.dataset.speechAction = "true";
-    play.dataset.requiresVoice = "true";
     play.dataset.idleLabel = sentence.idleLabel;
-    play.disabled = !cantoneseVoice;
+    play.disabled = false;
     setSpeakButtonState(play, false);
     play.setAttribute("aria-label", `${sentence.idleLabel}：${sentence.text}`);
     play.addEventListener("click", () => speakNewsSentence(sentence, play, card));
@@ -416,7 +479,7 @@ function renderNewsReader() {
     controls.hidden = false;
     $("#news-previous-sentence").disabled = activeNewsSentenceIndex === 0;
     $("#news-next-sentence").disabled = activeNewsSentenceIndex === newsSentences.length - 1;
-    $("#news-replay-sentence").disabled = !cantoneseVoice;
+    $("#news-replay-sentence").disabled = false;
   }
   updateWordSaveButtons();
 }
@@ -435,12 +498,14 @@ function playActiveNewsSentence() {
 }
 
 function speakNewsSentence(sentence, button, highlight) {
-  if (!activeNews || !cantoneseVoice) return;
-  playSpeechPlan({
+  if (!activeNews) return;
+  playNewsSpeech({
     id: `news-${activeNews.date}-sentence-${sentence.index}`,
-    plan: createSpeechPlan(sentence.text, { section: sentence.section }),
+    sentenceIndex: sentence.index,
     button,
-    highlight: () => highlight,
+    cloudHighlight: highlight,
+    fallbackPlan: createSpeechPlan(sentence.text, { section: sentence.section }),
+    fallbackHighlight: () => highlight,
     onError: () => {
       $("#news-error").textContent = "这句话没有朗读成功，请检查设备的粤语声音设置。";
     },
@@ -481,7 +546,7 @@ function selectNews(item) {
   const sourceLink = $("#news-source-link");
   sourceLink.hidden = !item.sourceUrl;
   if (item.sourceUrl) sourceLink.href = item.sourceUrl;
-  $("#news-speak").disabled = !cantoneseVoice;
+  $("#news-speak").disabled = false;
   document.querySelectorAll(".history-item").forEach((button) => {
     button.classList.toggle("active", button.dataset.date === item.date);
   });
@@ -509,15 +574,17 @@ function renderNewsHistory() {
 }
 
 function speakNews() {
-  if (!activeNews || !cantoneseVoice) return;
+  if (!activeNews) return;
   const button = $("#news-speak");
   const titlePlan = createSpeechPlan(activeNews.title, { section: "title" });
   const summaryPlan = createSpeechPlan(activeNews.summary);
-  playSpeechPlan({
+  playNewsSpeech({
     id: `news-${activeNews.date}`,
-    plan: [...titlePlan, ...summaryPlan],
+    sentenceIndex: "all",
     button,
-    highlight: (part) => part.section === "title" ? $("#news-title") : $("#news-summary"),
+    cloudHighlight: $("#news-card"),
+    fallbackPlan: [...titlePlan, ...summaryPlan],
+    fallbackHighlight: (part) => part.section === "title" ? $("#news-title") : $("#news-summary"),
     onError: () => {
       $("#news-error").textContent = "朗读没有成功，请检查设备是否安装了“粤语（香港）”声音。";
     },

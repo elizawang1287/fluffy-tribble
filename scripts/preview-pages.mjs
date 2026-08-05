@@ -5,6 +5,7 @@ import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { onRequest as convertRequest } from "../functions/api/v1/convert.js";
 import { onRequest as newsRequest } from "../functions/api/v1/news.js";
+import { onRequest as ttsRequest } from "../functions/api/v1/tts.js";
 import { onRequest as healthRequest } from "../functions/health.js";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -67,6 +68,7 @@ export function createPreviewServer({ output = defaultOutput } = {}) {
     try {
       if (pathname === "/api/v1/convert") return await send(response, await convertRequest(context));
       if (pathname === "/api/v1/news") return await send(response, await newsRequest(context));
+      if (pathname === "/api/v1/tts") return await send(response, await ttsRequest(context));
       if (pathname === "/health") return await send(response, await healthRequest(context));
       if (!new Set(["GET", "HEAD"]).has(request.method || "GET")) {
         response.writeHead(405, { allow: "GET, HEAD" });

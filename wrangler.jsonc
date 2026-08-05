@@ -2,5 +2,17 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "jyut-campus",
   "compatibility_date": "2026-08-04",
-  "pages_build_output_dir": "./dist"
+  "pages_build_output_dir": "./dist",
+  "vars": {
+    "GOOGLE_TTS_ENABLED": "true",
+    "GOOGLE_TTS_VOICE": "yue-HK-Chirp3-HD-Aoede",
+    "GOOGLE_TTS_MONTHLY_CHAR_LIMIT": "800000"
+  },
+  "d1_databases": [
+    {
+      "binding": "TTS_DB",
+      "database_name": "jyut-campus-tts",
+      "database_id": "f55e0093-60f8-4346-a28b-32f19f1f608f"
+    }
+  ]
 }

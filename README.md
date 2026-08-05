@@ -6,7 +6,7 @@
 
 - 简体中文转换为香港繁体并生成粤拼
 - 书面语与保守的香港校园口语转换
-- 按句拆分长文本并提供浏览器粤语朗读
+- 按句拆分长文本并提供粤语朗读
 - 校园情景短句、生词本、学习记录和每日任务
 - 每日学生短新闻及最近 30 天归档
 - 学习数据仅保存在当前浏览器，不上传用户输入
@@ -14,11 +14,12 @@
 ## 技术架构
 
 - Cloudflare Pages 托管 HTML、CSS、JavaScript 和新闻 JSON
-- Pages Functions 提供 `/api/v1/convert`、`/api/v1/news` 和 `/health`
+- Pages Functions 提供 `/api/v1/convert`、`/api/v1/news`、`/api/v1/tts` 和 `/health`
 - GitHub Actions 每天更新 `data/news/` 并触发 Pages 自动部署
-- 运行时不需要数据库或第三方 npm 依赖
+- Google TTS 未启用时，新闻自动使用浏览器的香港粤语声音
+- Google TTS 启用后，D1 只保存每月已使用字符数，不保存学生内容
 
-Google TTS、Azure 跟读评分和持久化免费额度计数尚未接入，将在迁移版体验确认后实施。
+Azure 跟读评分尚未接入。
 
 ## 本地开发
 
@@ -62,6 +63,18 @@ npm run deploy
 
 静态资源请求不会调用 Functions。转换和新闻接口会计入 Workers 免费请求额度。
 
+### Google TTS（可选）
+
+代码默认关闭 Google TTS，没有凭证也能正常运行，并自动回退到设备声音。正式启用前：
+
+1. 在 Cloudflare 创建一个 D1 数据库，并在 Pages 项目中绑定为 `TTS_DB`。
+2. 对该数据库执行 `migrations/0001_google_tts_usage.sql`。
+3. 将 Google 服务账号 JSON 完整内容保存为 Cloudflare Secret `GOOGLE_TTS_SERVICE_ACCOUNT_JSON`，不要写入代码或 GitHub。
+4. 添加变量 `GOOGLE_TTS_ENABLED=true`。
+5. 添加变量 `GOOGLE_TTS_MONTHLY_CHAR_LIMIT=800000`；代码强制最高为 800,000，也可以填更小的数。
+
+可选变量 `GOOGLE_TTS_VOICE` 用于指定 `yue-HK` 声音，默认是 `yue-HK-Chirp3-HD-Aoede`。接口只朗读仓库中已有的新闻，缓存命中不重复扣减额度；数据库异常或额度用完时会暂停云端朗读并回退到设备声音。
+
 ## API
 
 ### `POST /api/v1/convert`
@@ -79,6 +92,18 @@ npm run deploy
 
 返回最近 30 天经过规范化的新闻归档。
 
+### `POST /api/v1/tts`
+
+```json
+{
+  "newsDate": "2026-08-05",
+  "sentenceIndex": 0,
+  "speakingRate": 0.92
+}
+```
+
+`sentenceIndex` 也可以是 `"all"`。成功时返回 MP3；接口不接受任意文本，未配置或达到月限额时前端自动使用设备声音。
+
 ### `GET /health`
 
 返回 Cloudflare Pages Functions 的健康状态。
@@ -87,7 +112,7 @@ npm run deploy
 
 - 发布目录采用文件白名单，源代码、测试、配置和 Git 元数据不会作为静态资源发布
 - 响应包含 CSP、`nosniff`、Referrer Policy 和麦克风权限策略
-- API 凭证以后只能放入 Cloudflare Secrets，不能提交到 GitHub
+- API 凭证只能放入 Cloudflare Secrets，不能提交到 GitHub
 - 未来的学生录音只用于单次评分，完成后立即删除
 
 ## 第三方组件

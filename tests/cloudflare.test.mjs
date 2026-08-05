@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { onRequest as convertRequest } from "../functions/api/v1/convert.js";
 import { onRequest as newsRequest } from "../functions/api/v1/news.js";
+import { onRequest as ttsRequest } from "../functions/api/v1/tts.js";
 import { onRequest as healthRequest } from "../functions/health.js";
 import { createPreviewServer } from "../scripts/preview-pages.mjs";
 
@@ -102,6 +103,29 @@ test("news function returns a controlled error when the asset is unavailable", a
   assert.equal((await response.json()).error.code, "NEWS_UNAVAILABLE");
 });
 
+test("TTS function stays safely disabled until credentials and quota storage exist", async () => {
+  const disabled = await ttsRequest({
+    request: request("/api/v1/tts", { method: "POST" }),
+    env: {},
+  });
+  assert.equal(disabled.status, 503);
+  assert.equal((await disabled.json()).error.code, "TTS_DISABLED");
+
+  const missingQuota = await ttsRequest({
+    request: request("/api/v1/tts", { method: "POST" }),
+    env: {
+      GOOGLE_TTS_ENABLED: "true",
+      GOOGLE_TTS_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        project_id: "test",
+        client_email: "tts@test.iam.gserviceaccount.com",
+        private_key: "unused-in-this-test",
+      }),
+    },
+  });
+  assert.equal(missingQuota.status, 503);
+  assert.equal((await missingQuota.json()).error.code, "TTS_QUOTA_NOT_CONFIGURED");
+});
+
 test("local preview serves the Pages build and Functions end to end", async () => {
   const server = createPreviewServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -125,6 +149,10 @@ test("local preview serves the Pages build and Functions end to end", async () =
     const news = await fetch(`${origin}/api/v1/news`);
     assert.equal(news.status, 200);
     assert.ok((await news.json()).items.length > 0);
+
+    const tts = await fetch(`${origin}/api/v1/tts`, { method: "POST" });
+    assert.equal(tts.status, 503);
+    assert.equal((await tts.json()).error.code, "TTS_DISABLED");
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

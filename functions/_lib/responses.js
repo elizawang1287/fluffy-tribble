@@ -1,4 +1,4 @@
-const securityHeaders = {
+export const securityHeaders = {
   "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
   "permissions-policy": "microphone=(self), camera=(), geolocation=()",
   "referrer-policy": "strict-origin-when-cross-origin",
