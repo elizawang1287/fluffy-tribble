@@ -13,8 +13,10 @@ function request(path, init = {}) {
 
 test("Pages build contains only public assets", async () => {
   const html = await readFile(new URL("../dist/index.html", import.meta.url), "utf8");
+  const recordingCore = await readFile(new URL("../dist/recording-core.mjs", import.meta.url), "utf8");
   const headers = await readFile(new URL("../dist/_headers", import.meta.url), "utf8");
   assert.match(html, /粤读校园/);
+  assert.match(recordingCore, /recordingMaxDurationMs/);
   assert.match(headers, /Content-Security-Policy/);
   await assert.rejects(readFile(new URL("../dist/package.json", import.meta.url)));
 });

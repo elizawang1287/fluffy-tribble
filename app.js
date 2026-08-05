@@ -1,5 +1,12 @@
 import { createSpeechPlan, rankCantoneseVoices } from "./speech-core.mjs";
 import { clampNewsSentenceIndex, createNewsSentenceEntries, moveNewsSentence } from "./news-reading-core.mjs";
+import {
+  formatRecordingDuration,
+  preferredRecordingMimeType,
+  recordingErrorMessage,
+  recordingKey,
+  recordingMaxDurationMs,
+} from "./recording-core.mjs";
 import { campusCategories, campusPhrases, phraseForDate } from "./campus-phrases.mjs";
 import {
   addHistoryItem,
@@ -46,6 +53,11 @@ let activeNewsSentenceIndex = 0;
 let newsContinuousPlay = false;
 let newsFullTextVisible = false;
 let newsReaderCompleted = false;
+const newsRecordings = new Map();
+const maxLocalNewsRecordings = 20;
+let recordingSession = null;
+let recordingPlayback = null;
+let recordingPermissionKey = "";
 const phraseConversions = new Map();
 let campusCategory = "classroom";
 let campusPhraseIndex = 0;
@@ -147,6 +159,190 @@ function stopSpeaking() {
   window.speechSynthesis?.cancel();
   clearSpeechHighlights();
   resetSpeechButtons();
+}
+
+function refreshRecordingPanels() {
+  document.querySelectorAll("[data-recording-key]").forEach((panel) => {
+    const key = panel.dataset.recordingKey;
+    const entry = newsRecordings.get(key);
+    const active = recordingSession?.key === key;
+    const anotherActive = Boolean(recordingSession && !active);
+    const permissionPending = recordingPermissionKey === key;
+    const anotherPermissionPending = Boolean(recordingPermissionKey && !permissionPending);
+    const playing = recordingPlayback?.key === key;
+    const recordButton = panel.querySelector('[data-recording-action="record"]');
+    const playButton = panel.querySelector('[data-recording-action="play"]');
+    const deleteButton = panel.querySelector('[data-recording-action="delete"]');
+    const status = panel.querySelector("[data-recording-status]");
+    const card = panel.closest(".news-sentence");
+
+    recordButton.disabled = anotherActive || anotherPermissionPending || permissionPending;
+    recordButton.textContent = permissionPending ? "正在授权…" : active ? "■ 停止录音" : entry ? "● 重新录制" : "● 开始跟读";
+    playButton.hidden = !entry;
+    playButton.disabled = active;
+    playButton.textContent = playing ? "■ 停止回放" : "▶ 播放跟读";
+    deleteButton.hidden = !entry;
+    deleteButton.disabled = active;
+    status.textContent = active
+      ? `录音中 ${formatRecordingDuration(recordingSession.elapsedMs)} / 0:20`
+      : permissionPending
+        ? "请在浏览器提示中允许使用麦克风"
+        : entry
+        ? `已录制 ${formatRecordingDuration(entry.durationMs)} · 仅保存在本页`
+        : anotherActive || anotherPermissionPending
+          ? "请先完成当前录音"
+          : "录音只保存在本页，刷新后自动删除";
+    card?.classList.toggle("recording", active);
+  });
+}
+
+function stopRecordingPlayback() {
+  if (!recordingPlayback) return;
+  recordingPlayback.audio.pause();
+  recordingPlayback.audio.removeAttribute("src");
+  recordingPlayback.audio.load();
+  recordingPlayback = null;
+  refreshRecordingPanels();
+}
+
+function stopNewsRecording({ discard = false } = {}) {
+  const session = recordingSession;
+  if (!session) return;
+  session.discard ||= discard;
+  clearTimeout(session.limitTimer);
+  clearInterval(session.clockTimer);
+  if (session.recorder.state !== "inactive") session.recorder.stop();
+}
+
+async function startNewsRecording(sentence) {
+  const newsDate = activeNews?.date;
+  const key = recordingKey(newsDate, sentence.index);
+  if (recordingSession?.key === key) return stopNewsRecording();
+  if (recordingSession || recordingPermissionKey) return;
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    $("#news-error").textContent = "当前浏览器不支持录音，请尝试最新版 Chrome、Edge 或 Safari。";
+    return;
+  }
+
+  stopSpeaking();
+  stopRecordingPlayback();
+  recordingPermissionKey = key;
+  $("#news-error").textContent = "正在请求麦克风权限…";
+  refreshRecordingPanels();
+  let stream;
+  let session;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    if (activeNews?.date !== newsDate || currentRoute() !== "news") {
+      stream.getTracks().forEach((track) => track.stop());
+      recordingPermissionKey = "";
+      refreshRecordingPanels();
+      return;
+    }
+    const mimeType = preferredRecordingMimeType(MediaRecorder.isTypeSupported.bind(MediaRecorder));
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    session = {
+      key,
+      recorder,
+      stream,
+      chunks: [],
+      startedAt: Date.now(),
+      elapsedMs: 0,
+      discard: false,
+      limitTimer: null,
+      clockTimer: null,
+    };
+    recordingSession = session;
+    recordingPermissionKey = "";
+    recorder.ondataavailable = (event) => {
+      if (event.data?.size) session.chunks.push(event.data);
+    };
+    recorder.onerror = () => {
+      session.discard = true;
+      $("#news-error").textContent = "录音过程中出现问题，请重新尝试。";
+    };
+    recorder.onstop = () => {
+      clearTimeout(session.limitTimer);
+      clearInterval(session.clockTimer);
+      session.stream.getTracks().forEach((track) => track.stop());
+      const durationMs = Math.min(recordingMaxDurationMs, Date.now() - session.startedAt);
+      if (!session.discard && session.chunks.length) {
+        const previous = newsRecordings.get(key);
+        if (previous?.url) URL.revokeObjectURL(previous.url);
+        newsRecordings.delete(key);
+        while (newsRecordings.size >= maxLocalNewsRecordings) {
+          const oldestKey = newsRecordings.keys().next().value;
+          const oldest = newsRecordings.get(oldestKey);
+          if (oldest?.url) URL.revokeObjectURL(oldest.url);
+          newsRecordings.delete(oldestKey);
+        }
+        const blob = new Blob(session.chunks, { type: recorder.mimeType || session.chunks[0].type || "audio/webm" });
+        newsRecordings.set(key, { blob, url: URL.createObjectURL(blob), durationMs });
+        $("#news-error").textContent = "跟读录音完成，可以回放或重新录制。";
+      }
+      if (recordingSession === session) recordingSession = null;
+      refreshRecordingPanels();
+    };
+    recorder.start(250);
+    session.limitTimer = setTimeout(() => stopNewsRecording(), recordingMaxDurationMs);
+    session.clockTimer = setInterval(() => {
+      session.elapsedMs = Math.min(recordingMaxDurationMs, Date.now() - session.startedAt);
+      refreshRecordingPanels();
+    }, 250);
+    $("#news-error").textContent = "";
+    refreshRecordingPanels();
+  } catch (error) {
+    if (session) session.discard = true;
+    stream?.getTracks().forEach((track) => track.stop());
+    if (recordingSession === session) recordingSession = null;
+    recordingPermissionKey = "";
+    $("#news-error").textContent = recordingErrorMessage(error?.name);
+    refreshRecordingPanels();
+  }
+}
+
+function playNewsRecording(sentence) {
+  const key = recordingKey(activeNews?.date, sentence.index);
+  if (recordingPlayback?.key === key) return stopRecordingPlayback();
+  const entry = newsRecordings.get(key);
+  if (!entry || recordingSession) return;
+  stopSpeaking();
+  stopRecordingPlayback();
+  const audio = new Audio(entry.url);
+  recordingPlayback = { key, audio };
+  audio.onended = stopRecordingPlayback;
+  audio.onerror = () => {
+    stopRecordingPlayback();
+    $("#news-error").textContent = "录音回放失败，请重新录制。";
+  };
+  audio.play().catch(() => {
+    stopRecordingPlayback();
+    $("#news-error").textContent = "浏览器暂时无法播放录音，请再点一次。";
+  });
+  refreshRecordingPanels();
+}
+
+function deleteNewsRecording(sentence) {
+  const key = recordingKey(activeNews?.date, sentence.index);
+  if (recordingSession?.key === key) stopNewsRecording({ discard: true });
+  if (recordingPlayback?.key === key) stopRecordingPlayback();
+  const entry = newsRecordings.get(key);
+  if (entry?.url) URL.revokeObjectURL(entry.url);
+  newsRecordings.delete(key);
+  $("#news-error").textContent = "跟读录音已删除。";
+  refreshRecordingPanels();
+}
+
+function cleanupNewsRecordings() {
+  recordingPermissionKey = "";
+  stopNewsRecording({ discard: true });
+  recordingSession?.stream.getTracks().forEach((track) => track.stop());
+  recordingSession = null;
+  stopRecordingPlayback();
+  newsRecordings.forEach((entry) => URL.revokeObjectURL(entry.url));
+  newsRecordings.clear();
 }
 
 function updateVoiceControls() {
@@ -422,6 +618,37 @@ function renderNewsTokens(data) {
   renderNewsReader();
 }
 
+function renderRecordingPanel(sentence) {
+  const panel = document.createElement("div");
+  panel.className = "news-recording";
+  panel.dataset.recordingKey = recordingKey(activeNews?.date, sentence.index);
+
+  const actions = document.createElement("div");
+  actions.className = "news-recording-actions";
+  const record = document.createElement("button");
+  record.type = "button";
+  record.dataset.recordingAction = "record";
+  record.addEventListener("click", () => startNewsRecording(sentence));
+  const play = document.createElement("button");
+  play.type = "button";
+  play.dataset.recordingAction = "play";
+  play.addEventListener("click", () => playNewsRecording(sentence));
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "news-recording-delete";
+  remove.dataset.recordingAction = "delete";
+  remove.textContent = "删除";
+  remove.addEventListener("click", () => deleteNewsRecording(sentence));
+  actions.append(record, play, remove);
+
+  const status = document.createElement("span");
+  status.className = "news-recording-status";
+  status.dataset.recordingStatus = "true";
+  status.setAttribute("role", "status");
+  panel.append(actions, status);
+  return panel;
+}
+
 function renderNewsSentenceCard(sentence, withPlayButton = false) {
   const card = document.createElement("section");
   card.className = "news-sentence";
@@ -448,7 +675,8 @@ function renderNewsSentenceCard(sentence, withPlayButton = false) {
   line.className = "news-token-line";
   line.lang = "zh-HK";
   sentence.tokens.forEach((token) => line.append(renderToken(token, { source: sentence.text, sourceType: "news" })));
-  card.append(heading, line);
+  card.append(heading, line, renderRecordingPanel(sentence));
+  queueMicrotask(refreshRecordingPanels);
   return card;
 }
 
@@ -486,6 +714,8 @@ function renderNewsReader() {
 
 function setNewsSentenceIndex(index) {
   if (speakingId?.startsWith("news-")) stopSpeaking();
+  if (recordingSession) stopNewsRecording();
+  stopRecordingPlayback();
   activeNewsSentenceIndex = clampNewsSentenceIndex(index, newsSentences.length);
   newsReaderCompleted = false;
   renderNewsReader();
@@ -525,6 +755,8 @@ function speakNewsSentence(sentence, button, highlight) {
 
 function selectNews(item) {
   if (speakingId?.startsWith("news-")) stopSpeaking();
+  if (recordingSession) stopNewsRecording();
+  stopRecordingPlayback();
   activeNews = item;
   newsSentences = [];
   activeNewsSentenceIndex = 0;
@@ -995,6 +1227,8 @@ function currentRoute() {
 function renderAppRoute() {
   const route = currentRoute();
   if (speakingId) stopSpeaking();
+  if (route !== "news" && recordingSession) stopNewsRecording();
+  if (route !== "news") stopRecordingPlayback();
   document.body.dataset.route = route;
   document.querySelectorAll("[data-app-view]").forEach((element) => {
     const shouldShow = element.dataset.appView === route;
@@ -1034,6 +1268,8 @@ $("#news-continuous-play").addEventListener("change", (event) => {
 });
 $("#news-full-toggle").addEventListener("click", () => {
   if (speakingId?.startsWith("news-")) stopSpeaking();
+  if (recordingSession) stopNewsRecording();
+  stopRecordingPlayback();
   newsFullTextVisible = !newsFullTextVisible;
   renderNewsReader();
 });
@@ -1105,4 +1341,7 @@ renderDailyPlan();
 refreshVoice();
 loadNews();
 window.speechSynthesis?.addEventListener("voiceschanged", refreshVoice);
-window.addEventListener("pagehide", stopSpeaking);
+window.addEventListener("pagehide", () => {
+  stopSpeaking();
+  cleanupNewsRecordings();
+});

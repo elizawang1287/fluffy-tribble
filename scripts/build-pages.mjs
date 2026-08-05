@@ -10,6 +10,7 @@ const staticFiles = [
   "app.js",
   "speech-core.mjs",
   "news-reading-core.mjs",
+  "recording-core.mjs",
   "learning-core.mjs",
   "campus-phrases.mjs",
 ];
